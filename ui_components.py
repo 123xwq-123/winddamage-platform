@@ -178,6 +178,50 @@ button.wd-btn-danger {
 }
 button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
 
+/* ── 筛选工具栏 / 分页 ─────────────────────────────── */
+.wd-filterbar { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:flex-end;
+  background:var(--bg-card); border:1px solid var(--border); border-radius:8px;
+  box-shadow:var(--shadow-1); padding:12px 14px; margin-bottom:14px; }
+.wd-filterbar .wd-fitem { display:flex; flex-direction:column; gap:4px; min-width:130px; }
+.wd-filterbar .wd-flabel { font-size:12px; color:var(--text-2); }
+.wd-filterbar .wd-finput { border:1px solid var(--border); border-radius:6px;
+  padding:6px 10px; font-size:14px; background:var(--bg-card); color:var(--text-1); }
+.wd-filterbar .wd-finput:focus { outline:none; box-shadow:var(--focus-ring); border-color:var(--brand-500); }
+.wd-total-count { font-size:13px; color:var(--text-2); margin-left:auto; align-self:center; }
+.wd-pager { display:flex; align-items:center; gap:12px; justify-content:center;
+  padding:12px 0 4px; }
+.wd-pager .wd-page-btn { border:1px solid var(--border); background:var(--bg-card);
+  color:var(--text-1); border-radius:6px; padding:6px 16px; font-size:13px; cursor:pointer; }
+.wd-pager .wd-page-btn:disabled { color:var(--text-3); cursor:not-allowed; }
+.wd-pager .wd-page-info { font-size:13px; color:var(--text-2); font-variant-numeric:tabular-nums; }
+
+/* ── 详情页头部 / 返回链接 ─────────────────────────── */
+.wd-page-head { max-width:var(--reading-max, 880px); margin:0 auto; padding:20px 16px 0; }
+.wd-backlink { font-size:14px; color:var(--brand-500); text-decoration:none; }
+.wd-backlink:hover { text-decoration:underline; }
+
+/* ── 桌面 / 移动双渲染切换（服务端渲染两套，CSS 切换显示） ── */
+.wd-mobile-only { display:none; }
+@media (max-width: 767px) {
+  .wd-desktop-only { display:none; }
+  .wd-mobile-only { display:block; }
+}
+
+/* ── 移动端历史卡片 ────────────────────────────────── */
+.wd-mcard { background:var(--bg-card); border:1px solid var(--border); border-radius:8px;
+  box-shadow:var(--shadow-1); padding:12px 14px; margin-bottom:10px; }
+.wd-mcard.wd-row-danger { background:var(--danger-bg); }
+.wd-mcard .wd-mcard-head { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.wd-mcard .wd-mcard-name { font-size:14px; color:var(--text-2); word-break:break-all; }
+.wd-mcard .wd-mcard-meta { font-size:12px; color:var(--text-3); margin:6px 0 10px;
+  font-variant-numeric:tabular-nums; }
+.wd-mcard .wd-mcard-actions { display:flex; gap:8px; }
+.wd-mcard .wd-mcard-actions a { flex:1; text-align:center; border:1px solid var(--border);
+  border-radius:6px; padding:8px 0; font-size:13px; color:var(--brand-700);
+  text-decoration:none; background:var(--bg-card); }
+.wd-mcard .wd-mcard-actions a.wd-mcard-primary { background:var(--brand-700);
+  color:#fff; border-color:var(--brand-700); }
+
 /* ── 响应式 ────────────────────────────────────────── */
 @media (max-width: 767px) {
   .main-title h1 { font-size:20px; }
@@ -317,3 +361,38 @@ def data_table(headers, rows_html: str) -> str:
         f'<div class="table-wrap"><table class="wd-table">'
         f"<thead><tr>{ths}</tr></thead><tbody>{rows_html}</tbody></table></div>"
     )
+
+
+def mobile_history_card(badge_html: str, image_name: str, meta_html: str,
+                        detail_url: str, detail_label: str,
+                        danger: bool = False) -> str:
+    """移动端历史记录卡片（§7：<768px 替代表格）。"""
+    cls = " wd-row-danger" if danger else ""
+    return (
+        f'<div class="wd-mcard{cls}">'
+        f'<div class="wd-mcard-head">{badge_html}</div>'
+        f'<div class="wd-mcard-name">{esc(image_name)}</div>'
+        f'<div class="wd-mcard-meta">{meta_html}</div>'
+        f'<div class="wd-mcard-actions">'
+        f'<a class="wd-mcard-primary" href="{esc(detail_url)}">{esc(detail_label)}</a>'
+        f"</div></div>"
+    )
+
+
+def page_shell(title: str, body_html: str) -> str:
+    """独立页（FastAPI 渲染）的完整 HTML 外壳：内嵌设计令牌，viewport 齐全。"""
+    return f"""<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{esc(title)}</title>
+<style>
+{BASE_CSS}
+body {{ margin:0; }}
+</style>
+</head>
+<body>
+{body_html}
+</body>
+</html>"""

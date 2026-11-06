@@ -33,7 +33,8 @@ import gradio as gr
 from inference import WindDamageModel
 from parser import parse_json_pred, validate_report, get_field
 from formatter import format_report, format_summary, get_risk_badge, is_high_risk
-from history import init_db, save_record, list_records, get_record, clear_all, get_stats
+from history import (init_db, save_record, query_records, get_record, clear_all,
+                     get_stats, can_access, update_note, delete_record)
 from exporter import save_export
 from charts import charts_html
 from i18n import t as tr, tr_value
@@ -204,7 +205,8 @@ def analyze_single(image):
             )
 
         # 保存历史记录（先拿到记录 ID，用于摘要卡报告编号）
-        record_id = save_record(os.path.basename(image_path), parsed, infer_time, image_path)
+        record_id = save_record(os.path.basename(image_path), parsed, infer_time,
+                                image_path, source="ui", persist_image=True)
 
         detail_html, formatted = _build_result_html(parsed, meta={
             "record_id": record_id,
@@ -310,7 +312,8 @@ def analyze_batch(files):
             high_flags.append(high)
 
             # 保存历史
-            save_record(image_name, parsed, infer_time, image_path)
+            save_record(image_name, parsed, infer_time, image_path,
+                        source="batch", persist_image=True)
 
             status_parts.append(f"[{i+1}/{total}] {image_name}: ✅ {damage_type} | {priority}")
 
@@ -330,55 +333,57 @@ def analyze_batch(files):
 
 
 # ══════════════════════════════════════════════════════════
-#  Tab 3: 历史记录
+#  Tab 3: 历史记录（筛选 / 排序 / 分页 / 分级删除 / 移动卡片）
 # ══════════════════════════════════════════════════════════
 
-def refresh_history():
-    """刷新历史记录表格、统计卡、图表，并填充记录选择下拉框。"""
-    records = list_records(50)
-    stats = get_stats()
-    chart_html = charts_html()
+def _current_scope():
+    """当前会话的数据范围（user_id, is_admin）。
 
-    # 记录选择下拉框选项（label：#id | 图片名 | 风险 | 优先级 | 时间）
-    choices = []
-    for r in records:
-        risk_txt = tr("badge_high_risk") if r["high_risk"] else tr("badge_normal")
-        prio = tr_value(r["priority"]) if r["priority"] else "—"
-        label = f'#{r["id"]} | {r["image_name"]} | {risk_txt} | {prio} | {r["timestamp"]}'
-        choices.append((label, str(r["id"])))
+    认证阶段（阶段3）将替换为从会话解析真实用户；
+    当前占位：全量可见（与升级前行为一致）。
+    """
+    return None, True
 
-    dropdown_update = gr.update(choices=choices, value=choices[0][1] if choices else None)
 
+def _valid_date(s: str) -> bool:
+    try:
+        time.strptime(s.strip(), "%Y-%m-%d")
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
+def _risk_badge_cell(high_risk) -> str:
+    cls = "danger" if high_risk else "success"
+    txt = tr("badge_high_risk") if high_risk else tr("badge_normal")
+    return f'<span class="wd-badge wd-badge-{cls}">{txt}</span>'
+
+
+def _history_list_html(records, total, filtered):
+    """历史列表：桌面表格 + 移动卡片双渲染（CSS 切换）。"""
     if not records:
-        empty = uc.empty_state(tr("no_records"), tr("history_select_hint"), _UPLOAD_ICON_SVG)
-        return empty, empty, chart_html, dropdown_update
+        if filtered:
+            empty = uc.empty_state(tr("empty_filtered"), tr("empty_filtered_desc"))
+        else:
+            empty = (uc.empty_state(tr("empty_no_data"), tr("empty_no_data_desc"),
+                                    _UPLOAD_ICON_SVG))
+        return empty
 
-    # 统计卡
-    stats_html = (
-        '<div class="wd-stats">'
-        + uc.stat_card(stats["total"], tr("stat_total"))
-        + uc.stat_card(stats["high_risk"], tr("stat_high_risk"), tone="danger")
-        + uc.stat_card(stats["damaged"], tr("stat_damaged"), tone="warn")
-        + uc.stat_card(stats["normal"], tr("stat_normal"), tone="success")
-        + "</div>"
-    )
-
-    # 历史表
     header = [tr("hdr_id"), tr("hdr_timestamp"), tr("hdr_image"), tr("hdr_risk"),
               tr("hdr_damage"), tr("hdr_damage_type"), tr("hdr_component"),
               tr("hdr_priority"), tr("hdr_confidence"), tr("hdr_infer_time")]
-    rows = []
+    rows, cards = [], []
     for r in records:
-        risk_cell = (
-            f'<span class="wd-badge wd-badge-{"danger" if r["high_risk"] else "success"}">'
-            f'{tr("badge_high_risk") if r["high_risk"] else tr("badge_normal")}</span>'
-        )
-        row_cls = ' class="wd-row-danger"' if r["high_risk"] else ""
+        rid = r["id"]
+        high = bool(r["high_risk"])
+        row_cls = ' class="wd-row-danger"' if high else ""
+        src_tag = (f' <span class="wd-badge wd-badge-muted">{tr("badge_migrated")}</span>'
+                   if r.get("source") == "migration" else "")
         cells = [
-            f'<td class="wd-num">{r["id"]}</td>',
+            f'<td class="wd-num">{rid}</td>',
             f'<td class="wd-num">{uc.esc(r["timestamp"])}</td>',
-            f"<td>{uc.esc(r['image_name'])}</td>",
-            f"<td>{risk_cell}</td>",
+            f"<td>{uc.esc(r['image_name'])}{src_tag}</td>",
+            f"<td>{_risk_badge_cell(high)}</td>",
             f"<td>{uc.risk_badge(tr_value(r['has_damage'])) if r['has_damage'] else '—'}</td>",
             f"<td>{uc.esc(tr_value(r['damage_type'])) if r['damage_type'] else '—'}</td>",
             f"<td>{uc.esc(tr_value(r['component'])) if r['component'] else '—'}</td>",
@@ -387,19 +392,101 @@ def refresh_history():
             f'<td class="wd-num">{r["infer_time"] or "—"}s</td>',
         ]
         rows.append(f"<tr{row_cls}>{''.join(cells)}</tr>")
-    table_html = uc.data_table(header, "".join(rows))
 
-    return stats_html, table_html, chart_html, dropdown_update
+        meta = (f'{tr("card_time")}: {uc.esc(r["timestamp"])} · '
+                f'{tr("summary_priority")}: {uc.esc(tr_value(r["priority"]) or "—")} · '
+                f'{r["infer_time"] or "—"}s')
+        cards.append(uc.mobile_history_card(
+            _risk_badge_cell(high), r["image_name"], meta,
+            f"/history/{rid}", tr("btn_view_detail"), danger=high))
+
+    return (
+        f'<div class="wd-total-count" style="margin:0 0 10px;">'
+        f'{tr("filter_total", n=total)}</div>'
+        f'<div class="wd-desktop-only">{uc.data_table(header, "".join(rows))}</div>'
+        f'<div class="wd-mobile-only">{"".join(cards)}</div>'
+    )
+
+
+def query_history(search, risk, date_from, date_to, sort, page_size, page):
+    """按筛选/排序/分页查询历史。返回 (stats_html, list_html, page_info, dd_update, status)。"""
+    search = (search or "").strip()
+    date_from = (date_from or "").strip()
+    date_to = (date_to or "").strip()
+    if (date_from and not _valid_date(date_from)) or (date_to and not _valid_date(date_to)):
+        return "", tr("msg_invalid_date"), tr("page_info", page=1, pages=1, total=0), gr.update(), ""
+
+    user_id, is_admin = _current_scope()
+    scope = None if is_admin else user_id
+    try:
+        page_size = int(page_size)
+    except (TypeError, ValueError):
+        page_size = 20
+    page = max(1, int(page or 1))
+
+    rows, total = query_records(
+        limit=page_size, offset=(page - 1) * page_size, owner_user_id=scope,
+        search=search, risk=risk or "", date_from=date_from, date_to=date_to,
+        sort=sort or "time_desc")
+    pages = max(1, -(-total // page_size))
+    if page > pages:
+        page = pages
+        rows, total = query_records(
+            limit=page_size, offset=(page - 1) * page_size, owner_user_id=scope,
+            search=search, risk=risk or "", date_from=date_from, date_to=date_to,
+            sort=sort or "time_desc")
+
+    stats = get_stats(scope)
+    stats_html = (
+        '<div class="wd-stats">'
+        + uc.stat_card(stats["total"], tr("stat_total"))
+        + uc.stat_card(stats["high_risk"], tr("stat_high_risk"), tone="danger")
+        + uc.stat_card(stats["damaged"], tr("stat_damaged"), tone="warn")
+        + uc.stat_card(stats["normal"], tr("stat_normal"), tone="success")
+        + "</div>"
+    )
+    filtered = bool(search or risk or date_from or date_to)
+    list_html = _history_list_html(rows, total, filtered)
+    page_info = tr("page_info", page=page, pages=pages, total=total)
+
+    choices = []
+    for r in rows:
+        prio = tr_value(r["priority"]) if r["priority"] else "—"
+        label = f'#{r["id"]} | {r["image_name"]} | {tr("badge_high_risk") if r["high_risk"] else tr("badge_normal")} | {prio}'
+        choices.append((label, str(r["id"])))
+    dd_update = gr.update(choices=choices, value=None)
+
+    return stats_html, list_html, page_info, dd_update, ""
+
+
+def _quick_range(days):
+    """快捷日期范围 → (from, to)。"""
+    today = time.strftime("%Y-%m-%d")
+    if days <= 0:
+        return today, today
+    d = time.strftime("%Y-%m-%d", time.localtime(time.time() - days * 86400))
+    return d, today
+
+
+def refresh_history():
+    """刷新（保持与旧接口兼容的包装）：全量第一页。"""
+    stats_html, list_html, page_info, dd, _ = query_history("", "", "", "", "time_desc", 20, 1)
+    chart_html = charts_html()
+    return stats_html, list_html, page_info, dd, chart_html
 
 
 def view_history_detail(record_id_str):
-    """查看单条历史记录详情（记录由下拉框选择，替代手输 ID）。"""
+    """查看单条历史记录详情（含独立页链接、备注回填）。"""
+    empty_json = ""
     if not record_id_str or not str(record_id_str).strip().isdigit():
-        return uc.status_banner(tr("msg_invalid_id"), "warn"), ""
+        return uc.status_banner(tr("msg_invalid_id"), "warn"), empty_json, ""
 
+    user_id, is_admin = _current_scope()
     record = get_record(int(str(record_id_str).strip()))
     if not record:
-        return uc.status_banner(tr("msg_record_not_found", id=record_id_str), "error"), ""
+        return uc.status_banner(tr("msg_record_not_found", id=record_id_str), "error"), empty_json, ""
+    if not can_access(record, user_id, is_admin):
+        return uc.status_banner(tr("msg_record_no_access"), "error"), empty_json, ""
 
     report = json.loads(record["json_report"])
     detail_html, formatted = _build_result_html(report, meta={
@@ -407,9 +494,22 @@ def view_history_detail(record_id_str):
         "timestamp": record["timestamp"],
         "infer_time": record["infer_time"] or 0,
     })
-    json_str = formatted["json_str"]
+    link = (f'<div style="margin-bottom:10px;">'
+            f'<a class="wd-backlink" href="/history/{record["id"]}" target="_blank">'
+            f'{tr("open_full_page")}</a></div>')
+    return link + detail_html, formatted["json_str"], record.get("note") or ""
 
-    return detail_html, json_str
+
+def save_note(record_id_str, note):
+    """保存所选记录的备注（校验归属权限）。"""
+    if not record_id_str or not str(record_id_str).strip().isdigit():
+        return tr("msg_invalid_id")
+    user_id, is_admin = _current_scope()
+    record = get_record(int(str(record_id_str).strip()))
+    if not record or not can_access(record, user_id, is_admin):
+        return tr("msg_record_no_access")
+    update_note(record["id"], note or "")
+    return tr("msg_note_saved")
 
 
 def copy_json(json_str):
@@ -419,15 +519,48 @@ def copy_json(json_str):
     return tr("msg_no_json")
 
 
-def do_clear_history(confirmed):
-    """清空历史记录（需勾选确认框；未勾选则提示并保留数据）。"""
-    if not confirmed:
-        stats_html, table_html, chart_html, dropdown_update = refresh_history()
-        return stats_html, table_html, chart_html, dropdown_update, "", tr("msg_confirm_first")
-    n = get_stats()["total"]
+def ask_delete_record(record_id_str):
+    """单条删除第一步：显示确认条（分级确认：单条不需勾选，但需二次点击）。"""
+    if not record_id_str or not str(record_id_str).strip().isdigit():
+        return tr("msg_invalid_id"), gr.update(visible=False)
+    rid = int(str(record_id_str).strip())
+    rec = get_record(rid)
+    name = rec["image_name"] if rec else "—"
+    msg = f"⚠️ {tr('msg_delete_confirm_one', id=rid, name=uc.esc(name))}"
+    return (f'<div class="wd-banner" style="margin-bottom:0;">'
+            f'<span class="wd-banner-text">{msg}</span></div>'), gr.update(visible=True)
+
+
+def do_delete_record(record_id_str):
+    """单条删除第二步：确认后执行删除并刷新。"""
+    if record_id_str and str(record_id_str).strip().isdigit():
+        rid = int(str(record_id_str).strip())
+        user_id, is_admin = _current_scope()
+        rec = get_record(rid)
+        if rec and can_access(rec, user_id, is_admin):
+            delete_record(rid)
+            status = tr("msg_deleted_one", id=rid)
+        else:
+            status = tr("msg_record_no_access")
+    else:
+        status = tr("msg_invalid_id")
+    stats_html, list_html, page_info, dd, _ = query_history("", "", "", "", "time_desc", 20, 1)
+    return stats_html, list_html, page_info, dd, gr.update(visible=False), status
+
+
+def do_clear_history(typed):
+    """清空全部记录：需输入「确认清空」文字（分级删除最高档）。"""
+    typed = (typed or "").strip()
+    total = get_stats()["total"]
+    if total == 0:
+        stats_html, list_html, page_info, dd, _ = query_history("", "", "", "", "time_desc", 20, 1)
+        return stats_html, list_html, page_info, dd, "", tr("msg_confirm_first")
+    if typed != tr("clear_typed_word"):
+        return "", "", "", gr.update(), "", tr("msg_clear_typed_wrong")
+    n = total
     clear_all()
-    stats_html, table_html, chart_html, dropdown_update = refresh_history()
-    return stats_html, table_html, chart_html, dropdown_update, "", tr("msg_cleared_n", n=n)
+    stats_html, list_html, page_info, dd, _ = query_history("", "", "", "", "time_desc", 20, 1)
+    return stats_html, list_html, page_info, dd, "", tr("msg_deleted_n", n=n)
 
 
 # ══════════════════════════════════════════════════════════
@@ -517,30 +650,84 @@ def build_ui():
 
             # ─── Tab 3: 历史记录 ────────────────────────────
             with gr.TabItem(tr("tab_history")):
-                with gr.Row():
-                    btn_refresh = gr.Button(tr("btn_refresh"), variant="primary")
-                    btn_clear_history = gr.Button(tr("btn_clear_history"), variant="stop",
-                                                  elem_classes=["wd-btn-danger"])
+                # 筛选区
+                with gr.Row(equal_height=True):
+                    search_tb = gr.Textbox(label=tr("filter_search_label"),
+                                           placeholder=tr("filter_search_ph"), scale=2)
+                    risk_dd = gr.Dropdown(
+                        label=tr("filter_risk_label"), choices=[
+                            (tr("filter_risk_all"), ""),
+                            (tr("filter_risk_high"), "high"),
+                            (tr("filter_risk_normal"), "normal"),
+                        ], value="", scale=1)
+                    sort_dd = gr.Dropdown(
+                        label=tr("sort_label"), choices=[
+                            (tr("sort_time_desc"), "time_desc"),
+                            (tr("sort_time_asc"), "time_asc"),
+                            (tr("sort_risk"), "risk_desc"),
+                            (tr("sort_time_cost"), "infer_time_desc"),
+                        ], value="time_desc", scale=1)
+                    pagesize_dd = gr.Dropdown(
+                        label=tr("pagesize_label"),
+                        choices=[("20", "20"), ("50", "50")], value="20", scale=1)
+                with gr.Row(equal_height=True):
+                    date_from_tb = gr.Textbox(label=tr("filter_date_from"),
+                                              placeholder=tr("date_ph"), scale=1)
+                    date_to_tb = gr.Textbox(label=tr("filter_date_to"),
+                                            placeholder=tr("date_ph"), scale=1)
+                    btn_quick_today = gr.Button(tr("quick_today"), size="sm")
+                    btn_quick_7d = gr.Button(tr("quick_7d"), size="sm")
+                    btn_quick_30d = gr.Button(tr("quick_30d"), size="sm")
+                    btn_apply = gr.Button(tr("btn_apply_filter"), variant="primary")
+                    btn_refresh = gr.Button(tr("btn_refresh"))
+                    btn_reset_filter = gr.Button(tr("btn_reset_filter"))
 
+                filter_status = gr.HTML(value="")
                 history_stats = gr.HTML(value=tr("history_hint"))
+                history_list = gr.HTML(value="")
+                with gr.Row(equal_height=True):
+                    btn_prev_page = gr.Button(tr("btn_prev_page"), size="sm")
+                    page_info_html = gr.HTML(value="")
+                    btn_next_page = gr.Button(tr("btn_next_page"), size="sm")
                 history_charts = gr.HTML(value=tr("charts_hint"))
-                history_table = gr.HTML(value="")
+                page_state = gr.State(value=1)
 
+                # 详情 / 删除
                 gr.Markdown(tr("detail_section"))
-                with gr.Row():
+                with gr.Row(equal_height=True):
                     history_record_dd = gr.Dropdown(
                         label=tr("history_select_label"),
                         choices=[], interactive=True,
-                        info=tr("history_select_hint"),
-                    )
-                    btn_view_detail = gr.Button(tr("btn_view_detail"), variant="primary")
-                    btn_copy_history_json = gr.Button(tr("btn_copy_json"))
+                        info=tr("history_select_hint"), scale=3)
+                    btn_view_detail = gr.Button(tr("btn_view_detail"), variant="primary", scale=1)
+                    btn_delete_one = gr.Button(tr("btn_delete_one"),
+                                               elem_classes=["wd-btn-danger"], scale=1)
+                confirm_row = gr.Row(visible=False)
+                with confirm_row:
+                    confirm_md = gr.HTML(value="")
+                    btn_delete_confirm = gr.Button(tr("btn_delete_confirm"),
+                                                   variant="stop",
+                                                   elem_classes=["wd-btn-danger"])
+                    btn_delete_cancel = gr.Button(tr("btn_delete_cancel"))
 
                 history_detail = gr.HTML(value=tr("detail_hint"))
                 with gr.Accordion(tr("json_accordion2"), open=False):
                     history_json = gr.Code(language="json", interactive=False)
 
-                clear_confirm = gr.Checkbox(label=tr("confirm_clear_label"), value=False)
+                with gr.Row(equal_height=True):
+                    note_tb = gr.Textbox(label=tr("note_label"), lines=2, scale=3)
+                    btn_save_note = gr.Button(tr("btn_save_note"), scale=1)
+
+                # 清空（分级删除最高档：输入确认文字）
+                with gr.Accordion(tr("btn_clear_history"), open=False):
+                    gr.Markdown(tr("clear_warning"))
+                    with gr.Row(equal_height=True):
+                        clear_typed_tb = gr.Textbox(
+                            label=tr("clear_typed_label"),
+                            placeholder=tr("clear_typed_ph"), scale=1)
+                        btn_clear_history = gr.Button(
+                            tr("btn_clear_n", n=0), variant="stop",
+                            elem_classes=["wd-btn-danger"], scale=1)
 
         # ─── 事件绑定 ───
         # Tab 1
@@ -572,26 +759,84 @@ def build_ui():
             outputs=[batch_summary, batch_html, batch_status],
         )
 
-        # Tab 3
-        btn_refresh.click(
-            fn=refresh_history,
-            outputs=[history_stats, history_table, history_charts, history_record_dd],
-        )
-        btn_clear_history.click(
-            fn=do_clear_history,
-            inputs=[clear_confirm],
-            outputs=[history_stats, history_table, history_charts, history_record_dd,
-                     clear_confirm, batch_status],
-        )
+        # Tab 3 — 查询（任何筛选变化 → 回第一页）
+        QUERY_INPUTS = [search_tb, risk_dd, date_from_tb, date_to_tb,
+                        sort_dd, pagesize_dd, page_state]
+        QUERY_OUTPUTS = [history_stats, history_list, page_info_html,
+                         history_record_dd, filter_status]
+
+        def _run_query(search, risk, df, dt, sort, psize, page):
+            return query_history(search, risk, df, dt, sort, psize, page)
+
+        btn_apply.click(fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS)
+        search_tb.submit(fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS)
+        for comp in (risk_dd, sort_dd, pagesize_dd):
+            comp.change(fn=lambda: 1, outputs=page_state).then(
+                fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS)
+
+        # 快捷日期范围（设置日期后回第一页查询）
+        def _set_range(days):
+            return (*_quick_range(days), 1)
+        for btn, days in ((btn_quick_today, 0), (btn_quick_7d, 7), (btn_quick_30d, 30)):
+            btn.click(fn=lambda d=days: _set_range(d),
+                      inputs=[], outputs=[date_from_tb, date_to_tb, page_state]).then(
+                fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS)
+
+        btn_reset_filter.click(
+            fn=lambda: ("", "", "", "", "time_desc", "20", 1),
+            inputs=[], outputs=[search_tb, risk_dd, date_from_tb, date_to_tb,
+                                sort_dd, pagesize_dd, page_state]).then(
+            fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS)
+
+        # 分页
+        btn_prev_page.click(fn=lambda p: max(1, int(p) - 1),
+                            inputs=[page_state], outputs=page_state).then(
+            fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS)
+        btn_next_page.click(fn=lambda p: int(p) + 1,
+                            inputs=[page_state], outputs=page_state).then(
+            fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS)
+
+        # 首次加载 / 手动刷新
+        btn_refresh.click(fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS).then(
+            fn=lambda: charts_html(), inputs=[], outputs=[history_charts])
+        app.load(fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS).then(
+            fn=lambda: charts_html(), inputs=[], outputs=[history_charts])
+
+        # 详情
         btn_view_detail.click(
             fn=view_history_detail,
             inputs=[history_record_dd],
-            outputs=[history_detail, history_json],
+            outputs=[history_detail, history_json, note_tb],
         )
-        btn_copy_history_json.click(
-            fn=copy_json,
-            inputs=[history_json],
-            outputs=[batch_status],
+        btn_save_note.click(
+            fn=save_note,
+            inputs=[history_record_dd, note_tb],
+            outputs=[filter_status],
+        )
+
+        # 单条删除（确认条两步）
+        btn_delete_one.click(
+            fn=ask_delete_record,
+            inputs=[history_record_dd],
+            outputs=[confirm_md, confirm_row],
+        )
+        btn_delete_cancel.click(
+            fn=lambda: gr.update(visible=False),
+            inputs=[], outputs=[confirm_row],
+        )
+        btn_delete_confirm.click(
+            fn=do_delete_record,
+            inputs=[history_record_dd],
+            outputs=[history_stats, history_list, page_info_html,
+                     history_record_dd, confirm_row, filter_status],
+        )
+
+        # 清空（输入确认文字）
+        btn_clear_history.click(
+            fn=do_clear_history,
+            inputs=[clear_typed_tb],
+            outputs=[history_stats, history_list, page_info_html,
+                     history_record_dd, clear_typed_tb, filter_status],
         )
 
     # 页脚 — 放在 Tabs 外层，全宽居中
@@ -605,20 +850,14 @@ def build_ui():
 
 
 if __name__ == "__main__":
+    # 统一经由 server.py 组装（FastAPI 独立路由 + Gradio 挂载）
+    from server import create_app
+    import uvicorn
+    from history import init_db
+
     init_db()
+    port = int(os.environ.get("GRADIO_SERVER_PORT", "7860"))
     print("=" * 60)
-    print(f"  {tr('app_title')} V1.0  [UI: {i18n.LANG}]")
+    print(f"  {tr('app_title')} V1.0  [UI: {i18n.LANG}]  http://0.0.0.0:{port}")
     print("=" * 60)
-
-    # 支持环境变量覆盖端口（软著截图等自动化场景用）
-    server_port = int(os.environ.get("GRADIO_SERVER_PORT", "7860"))
-
-    app = build_ui()
-    app.launch(
-        server_name="0.0.0.0",
-        server_port=server_port,
-        share=False,
-        show_error=True,
-        theme=gr.themes.Soft(primary_hue="blue"),  # Gradio 6：theme/css 移至 launch()
-        css=uc.BASE_CSS,
-    )
+    uvicorn.run(create_app(), host="0.0.0.0", port=port, log_level="info")
