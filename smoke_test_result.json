@@ -1,0 +1,26 @@
+{
+  "model_load": {
+    "ok": true,
+    "time_s": 7.0,
+    "mem_gb": 8.55,
+    "error": null
+  },
+  "template_check": {
+    "ok": true,
+    "has_template": true,
+    "is_thinking": false,
+    "error": null
+  },
+  "inference": {
+    "ok": true,
+    "time_s": 13.2,
+    "json_parsed": true,
+    "error": null
+  },
+  "output_quality": {
+    "ok": true,
+    "valid_report": true,
+    "missing": [],
+    "error": null
+  }
+}

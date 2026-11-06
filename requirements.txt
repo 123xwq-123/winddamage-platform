@@ -1,0 +1,37 @@
+# 风电结构损伤检测智能平台 — 依赖清单
+# Python 3.11 + Apple Silicon (MPS)
+# 安装: pip install -r requirements.txt
+# 注意: transformers 须从 main 分支安装（≥5.6.0）
+
+# --- 推理核心 ---
+# transformers main 分支（config.json 要求 transformers_version: 5.6.0）
+transformers @ git+https://github.com/huggingface/transformers.git@main
+
+# PyTorch（macOS MPS 后端）
+# macOS 上 conda 安装 torch 自带 MPS 支持
+torch
+torchvision
+
+# Qwen 视觉处理工具
+qwen-vl-utils
+
+# --- 前端 ---
+gradio>=4.0.0
+
+# --- 统计图表（charts.py 统计面板）---
+matplotlib
+
+# --- 图像处理 ---
+pillow
+
+# --- 辅助 ---
+# accelerate（模型加载优化，可选但推荐）
+accelerate
+
+# 注意事项:
+# 1. 如果 MPS 不兼容 Gated DeltaNet 层，降级为 CPU 推理（无需额外依赖）
+# 2. 如果需要 4bit 量化，macOS 上 bnb 可能不支持，备选 GGUF（llama.cpp）
+# 3. qwen-vl-utils 首次运行可能需要安装额外依赖（根据其 setup.py）
+
+# --- 软著材料生成（generate_copyright_docs.py）---
+python-docx

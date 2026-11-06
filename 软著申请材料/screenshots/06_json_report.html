@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,sans-serif; background:#f5f5f5; }
+.header { text-align:center; padding:20px; background:white; border-bottom:1px solid #ddd; }
+.header h1 { font-size:28px; margin:0; }
+.header p { color:#666; margin:5px 0 0; }
+.container { padding:20px; max-width:1280px; margin:0 auto; }
+.panel { background:white; border-radius:8px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+.json-box { background:#f8f9fa; border-radius:8px; padding:16px; font-family:'SF Mono',Consolas,monospace; font-size:13px; white-space:pre-wrap; line-height:1.5; }
+</style>
+</head><body>
+<div class="header">
+  <h1><svg width="38" height="38" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style="vertical-align:-8px;margin-right:6px;"><circle cx="32" cy="32" r="30" fill="#EBF5FB" stroke="#125191" stroke-width="1.5"/><rect x="29.5" y="36" width="5" height="22" fill="#7F8C8D"/><rect x="23" y="30" width="18" height="8" rx="2" fill="#5DADE2"/><circle cx="32" cy="28" r="3.5" fill="#34495E"/><g fill="#F1F8FD" stroke="#5DADE2" stroke-width="0.8"><path d="M32 28 L38 10 A5 5 0 0 1 44 8 L46 16 Z"/><path d="M32 28 L14 18 A5 5 0 0 1 10 12 L20 9 Z"/><path d="M32 28 L42 42 A5 5 0 0 1 41 48 L32 44 Z"/></g></svg>风电塔灾损测算多模态大模型可视化软件</h1>
+</div>
+<div class="container">
+  <div class="panel">
+    <h3 style="color:#125191;">📄 完整 JSON 报告 — 000020.jpg</h3>
+    <div class="json-box">{
+  "图像Caption": {
+    "简要": "风机倒塌，塔筒断裂，叶片散落，机舱触地",
+    "图像质量评价": "清晰"
+  },
+  "1. 构件识别": {
+    "构件名称": "塔筒、叶片、机舱",
+    "构件所属系统": "塔筒结构、叶片结构、机舱结构"
+  },
+  "2. 损伤判定": {
+    "是否可判定": "是",
+    "是否存在损伤": "是",
+    "损伤类型": "断裂、结构变形、撞击损伤",
+    "不可判定原因": "无",
+    "损伤分布位置与范围": "塔筒中上部断裂，叶片多处断裂，机舱触地",
+    "关键视觉证据描述": "塔筒断成数段，叶片折断散落，机舱触地，碎片遍布",
+    "可能的成因推测": "无法判断",
+    "损伤发展趋势": "稳定"
+  },
+  "3. 潜在风险影响分析": {
+    "对结构安全性的影响程度": "高",
+    "是否对机组运行可靠性影响": "是",
+    "是否对长期服役寿命的影响": "是"
+  },
+  "4. 运维与处置建议": {
+    "是否建议停机、限功率运行或重点监测": "是",
+    "短期处置建议": "立即封锁现场，防止次生灾害，清理碎片",
+    "中长期修复或改进建议": "开展事故调查，拆除残骸，评估基础后重建",
+    "后续巡检建议关注的问题": "同风场其他机组塔筒焊缝、叶片根部、基础连接"
+  },
+  "5. 不确定性说明与调查建议": {
+    "是否建议补充获取更高分辨率或多角度图像": "是",
+    "是否建议结合现场巡检或历史运维数据进行综合判断": "是",
+    "当前是否建议仅基于该图像做出维修或停机决策": "否"
+  },
+  "6. 结论建议": {
+    "本次判断的置信度": "高",
+    "巡检优先级": "高"
+  }
+}</div>
+  </div>
+</div>
+<div style="text-align:center;color:#999;font-size:12px;padding:10px 0 4px;margin-top:8px;">
+  © 2026 风电塔灾损测算多模态大模型可视化软件 V1.0
+</div>
+</body></html>

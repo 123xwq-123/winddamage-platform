@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,sans-serif; background:#f5f5f5; }
+.header { text-align:center; padding:20px; background:white; border-bottom:1px solid #ddd; }
+.header h1 { font-size:28px; margin:0; }
+.header p { color:#666; margin:5px 0 0; }
+.container { display:flex; gap:20px; padding:20px; max-width:1280px; margin:0 auto; }
+.left { width:400px; }
+.right { flex:1; }
+.panel { background:white; border-radius:8px; padding:20px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+.panel h3 { color:#125191; margin:0 0 12px; font-size:16px; }
+.upload-area { border:2px solid #ddd; border-radius:8px; overflow:hidden; }
+.upload-area img { width:100%; display:block; }
+.status { font-family:monospace; padding:8px 12px; background:#f8f9fa; border-radius:4px; font-size:13px; }
+.tabs { display:flex; gap:4px; padding:0 20px; background:white; border-bottom:1px solid #ddd; }
+.tab { padding:10px 20px; cursor:pointer; color:#666; border-bottom:2px solid transparent; }
+.tab.active { color:#125191; border-bottom-color:#125191; font-weight:bold; }
+.json-box { background:#f8f9fa; border-radius:4px; padding:12px; font-family:monospace; font-size:12px; white-space:pre-wrap; max-height:400px; overflow-y:auto; }
+</style>
+</head><body>
+<div class="header">
+  <h1><svg width="38" height="38" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style="vertical-align:-8px;margin-right:6px;"><circle cx="32" cy="32" r="30" fill="#EBF5FB" stroke="#125191" stroke-width="1.5"/><rect x="29.5" y="36" width="5" height="22" fill="#7F8C8D"/><rect x="23" y="30" width="18" height="8" rx="2" fill="#5DADE2"/><circle cx="32" cy="28" r="3.5" fill="#34495E"/><g fill="#F1F8FD" stroke="#5DADE2" stroke-width="0.8"><path d="M32 28 L38 10 A5 5 0 0 1 44 8 L46 16 Z"/><path d="M32 28 L14 18 A5 5 0 0 1 10 12 L20 9 Z"/><path d="M32 28 L42 42 A5 5 0 0 1 41 48 L32 44 Z"/></g></svg>风电塔灾损测算多模态大模型可视化软件</h1>
+</div>
+<div class="tabs">
+  <div class="tab active">📷 单图检测</div>
+  <div class="tab">📂 批量检测</div>
+  <div class="tab">📊 历史记录</div>
+</div>
+<div class="container">
+  <div class="left">
+    <div class="panel">
+      <h3>上传巡检图片</h3>
+      <div class="upload-area">
+        <img src="file://D:\Desktop\归档\data\images/000020.jpg" alt="巡检图片">
+      </div>
+    </div>
+    <div class="panel">
+      <div class="status">✅ 推理完成 (14.7s) | JSON: ✅ | 完整性: ✅</div>
+    </div>
+  </div>
+  <div class="right">
+    <div class="panel">
+      <h3>⚠️ 塔筒、叶片、机舱 — 断裂、结构变形、撞击损伤 — 优先级: 高</h3>
+      <div style="background:#FDEDEC;border:2px solid #E74C3C;border-radius:8px;padding:12px;margin-bottom:16px;">
+        <span style="font-size:18px;font-weight:bold;color:#E74C3C;">⚠️ 高风险检测结果</span></div>
+      <div style="margin-bottom:16px;"><h3 style="color:#125191;border-bottom:2px solid #125191;padding-bottom:4px;">🖼️ 图像信息</h3><table style="width:100%;border-collapse:collapse;"><tr><td style="width:140px;padding:4px 8px;color:#555;">简要描述</td><td style="padding:4px 8px;font-weight:bold;">风机倒塌，塔筒断裂，叶片散落，机舱触地</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">图像质量</td><td style="padding:4px 8px;font-weight:bold;">清晰</td></tr></table></div><div style="margin-bottom:16px;"><h3 style="color:#125191;border-bottom:2px solid #125191;padding-bottom:4px;">🔧 1. 构件识别</h3><table style="width:100%;border-collapse:collapse;"><tr><td style="width:140px;padding:4px 8px;color:#555;">构件名称</td><td style="padding:4px 8px;font-weight:bold;">塔筒、叶片、机舱</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">所属系统</td><td style="padding:4px 8px;font-weight:bold;">塔筒结构、叶片结构、机舱结构</td></tr></table></div><div style="margin-bottom:16px;"><h3 style="color:#125191;border-bottom:2px solid #125191;padding-bottom:4px;">⚠️ 2. 损伤判定</h3><table style="width:100%;border-collapse:collapse;"><tr><td style="width:140px;padding:4px 8px;color:#555;">是否可判定</td><td style="padding:4px 8px;font-weight:bold;">是</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">是否存在损伤</td><td style="padding:4px 8px;font-weight:bold;"><span style="color:#E74C3C;font-weight:bold">是</span></td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">损伤类型</td><td style="padding:4px 8px;font-weight:bold;">断裂、结构变形、撞击损伤</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">发展趋势</td><td style="padding:4px 8px;font-weight:bold;">稳定</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">位置与范围</td><td style="padding:4px 8px;font-weight:bold;">塔筒中上部断裂，叶片多处断裂，机舱触地</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">视觉证据</td><td style="padding:4px 8px;font-weight:bold;">塔筒断成数段，叶片折断散落，机舱触地，碎片遍布</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">成因推测</td><td style="padding:4px 8px;font-weight:bold;">无法判断</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">不可判定原因</td><td style="padding:4px 8px;font-weight:bold;">无</td></tr></table></div><div style="margin-bottom:16px;"><h3 style="color:#125191;border-bottom:2px solid #125191;padding-bottom:4px;">🔴 3. 潜在风险影响分析</h3><table style="width:100%;border-collapse:collapse;"><tr><td style="width:140px;padding:4px 8px;color:#555;">对结构安全影响</td><td style="padding:4px 8px;font-weight:bold;"><span style="color:#E74C3C;font-weight:bold">高</span></td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">对运行可靠性影响</td><td style="padding:4px 8px;font-weight:bold;">是</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">对长期寿命影响</td><td style="padding:4px 8px;font-weight:bold;">是</td></tr></table></div><div style="margin-bottom:16px;"><h3 style="color:#125191;border-bottom:2px solid #125191;padding-bottom:4px;">🛠️ 4. 运维与处置建议</h3><table style="width:100%;border-collapse:collapse;"><tr><td style="width:140px;padding:4px 8px;color:#555;">建议停机/限功率</td><td style="padding:4px 8px;font-weight:bold;"><span style="color:#E74C3C;font-weight:bold">是</span></td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">短期处置</td><td style="padding:4px 8px;font-weight:bold;">立即封锁现场，防止次生灾害，清理碎片</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">中长期修复</td><td style="padding:4px 8px;font-weight:bold;">开展事故调查，拆除残骸，评估基础后重建</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">后续巡检关注</td><td style="padding:4px 8px;font-weight:bold;">同风场其他机组塔筒焊缝、叶片根部、基础连接</td></tr></table></div><div style="margin-bottom:16px;"><h3 style="color:#125191;border-bottom:2px solid #125191;padding-bottom:4px;">❓ 5. 不确定性说明</h3><table style="width:100%;border-collapse:collapse;"><tr><td style="width:140px;padding:4px 8px;color:#555;">建议补充图像</td><td style="padding:4px 8px;font-weight:bold;">是</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">建议结合巡检历史</td><td style="padding:4px 8px;font-weight:bold;">是</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">仅基于图像决策</td><td style="padding:4px 8px;font-weight:bold;">否</td></tr></table></div><div style="margin-bottom:16px;"><h3 style="color:#125191;border-bottom:2px solid #125191;padding-bottom:4px;">📋 6. 结论建议</h3><table style="width:100%;border-collapse:collapse;"><tr><td style="width:140px;padding:4px 8px;color:#555;">置信度</td><td style="padding:4px 8px;font-weight:bold;">高</td></tr><tr><td style="width:140px;padding:4px 8px;color:#555;">巡检优先级</td><td style="padding:4px 8px;font-weight:bold;"><span style="color:#E74C3C;font-weight:bold">高</span></td></tr></table></div>
+      <details style="margin-top:16px;">
+        <summary style="cursor:pointer;font-weight:bold;color:#125191;">📄 完整 JSON 报告</summary>
+        <div class="json-box">{
+  "图像Caption": {
+    "简要": "风机倒塌，塔筒断裂，叶片散落，机舱触地",
+    "图像质量评价": "清晰"
+  },
+  "1. 构件识别": {
+    "构件名称": "塔筒、叶片、机舱",
+    "构件所属系统": "塔筒结构、叶片结构、机舱结构"
+  },
+  "2. 损伤判定": {
+    "是否可判定": "是",
+    "是否存在损伤": "是",
+    "损伤类型": "断裂、结构变形、撞击损伤",
+    "不可判定原因": "无",
+    "损伤分布位置与范围": "塔筒中上部断裂，叶片多处断裂，机舱触地",
+    "关键视觉证据描述": "塔筒断成数段，叶片折断散落，机舱触地，碎片遍布",
+    "可能的成因推测": "无法判断",
+    "损伤发展趋势": "稳定"
+  },
+  "3. 潜在风险影响分析": {
+    "对结构安全性的影响程度": "高",
+    "是否对机组运行可靠性影响": "是",
+    "是否对长期服役寿命的影响": "是"
+  },
+  "4. 运维与处置建议": {
+    "是否建议停机、限功率运行或重点监测": "是",
+    "短期处置建议": "立即封锁现场，防止次生灾害，清理碎片",
+    "中长期修复或改进建议": "开展事故调查，拆除残骸，评估基础后重建",
+    "后续巡检建议关注的问题": "同风场其他机组塔筒焊缝、叶片根部、基础连接"
+  },
+  "5. 不确定性说明与调查建议": {
+    "是否建议补充获取更高分辨率或多角度图像": "是",
+    "是否建议结合现场巡检或历史运维数据进行综合判断": "是",
+    "当前是否建议仅基于该图像做出维修或停机决策": "否"
+  },
+  "6. 结论建议": {
+    "本次判断的置信度": "高",
+    "巡检优先级": "高"
+  }
+}</div>
+      </details>
+    </div>
+  </div>
+</div>
+<div style="text-align:center;color:#999;font-size:12px;padding:10px 0 4px;margin-top:8px;">
+  © 2026 风电塔灾损测算多模态大模型可视化软件 V1.0
+</div>
+</body></html>

@@ -1,0 +1,34 @@
+{
+  "total": 3,
+  "json_rate": 1.0,
+  "damage_acc": 1.0,
+  "type_acc": 0.6666666666666666,
+  "priority_acc": 1.0,
+  "avg_time_s": 13.4,
+  "details": [
+    {
+      "image": "000006.jpg",
+      "elapsed_s": 13.1,
+      "json_ok": true,
+      "damage_match": true,
+      "type_match": true,
+      "priority_match": true
+    },
+    {
+      "image": "000007.jpg",
+      "elapsed_s": 12.8,
+      "json_ok": true,
+      "damage_match": true,
+      "type_match": true,
+      "priority_match": true
+    },
+    {
+      "image": "000020.jpg",
+      "elapsed_s": 14.2,
+      "json_ok": true,
+      "damage_match": true,
+      "type_match": false,
+      "priority_match": true
+    }
+  ]
+}
