@@ -7,3 +7,4 @@ qwen3.5-4b*/
 *.safetensors
 .gradio/
 qa_screenshots/
+qa_tmp/

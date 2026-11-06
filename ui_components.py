@@ -10,6 +10,8 @@
 
 import html as _html
 
+import i18n
+
 
 # ══════════════════════════════════════════════════════════
 #  设计令牌 + 全局样式（经 launch(css=...) 注入）
@@ -234,6 +236,13 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
   * { transition:none !important; animation:none !important; }
 }
 
+/* ── 可访问性（§6.4 子集）：键盘焦点可见，鼠标点击不高亮 ── */
+:focus { outline:none; }
+:focus-visible { outline:2px solid var(--brand-500); outline-offset:2px;
+  border-radius:4px; }
+.wd-btn:focus-visible, button:focus-visible, a:focus-visible {
+  outline:2px solid var(--brand-500); outline-offset:2px; }
+
 /* ── 认证页（登录/注册/初始化，§10）────────────────── */
 .wd-auth-wrap { min-height:calc(100vh - 40px); display:flex; align-items:center;
   justify-content:center; padding:20px 16px; }
@@ -440,10 +449,11 @@ def mobile_history_card(badge_html: str, image_name: str, meta_html: str,
     )
 
 
-def page_shell(title: str, body_html: str) -> str:
+def page_shell(title: str, body_html: str, lang: str = None) -> str:
     """独立页（FastAPI 渲染）的完整 HTML 外壳：内嵌设计令牌，viewport 齐全。"""
+    lang_attr = esc(lang or i18n.LANG)
     return f"""<!doctype html>
-<html lang="zh">
+<html lang="{lang_attr}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
