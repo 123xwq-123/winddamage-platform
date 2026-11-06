@@ -169,25 +169,23 @@ def trend_chart() -> str:
 
 
 def charts_html() -> str:
-    """生成图表区 HTML（三图并排），无数据时返回占位。"""
+    """生成图表区 HTML（三图并排，设计系统卡片样式），无数据时返回占位。"""
     dmg = damage_type_chart()
     pri = priority_chart()
     trd = trend_chart()
 
     if not dmg and not pri and not trd:
-        return (f"<p style='color:#999;text-align:center;padding:20px;'>"
+        return (f"<p style='color:#9AA5B1;text-align:center;padding:20px;'>"
                 f"{tr('no_chart_data')}</p>")
 
-    img_style = "width:100%;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);"
-    parts = ["<div style='display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;'>"]
+    parts = ["<div class='wd-charts'>"]
     for b64, title in [(dmg, tr("chart_damage_short")),
                        (pri, tr("chart_priority_short")),
                        (trd, tr("chart_trend_short"))]:
         if b64:
             parts.append(
-                f"<div style='flex:1;min-width:240px;background:white;border-radius:8px;"
-                f"padding:10px;'>"
-                f"<img src='data:image/png;base64,{b64}' style='{img_style}' alt='{title}'/>"
+                f"<div class='wd-chart-card'>"
+                f"<img src='data:image/png;base64,{b64}' alt='{title}'/>"
                 f"</div>"
             )
     parts.append("</div>")

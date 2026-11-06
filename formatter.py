@@ -46,13 +46,14 @@ def is_high_risk(report: Dict) -> bool:
 
 
 def get_risk_badge(value: str, field_name: str = "") -> str:
-    """生成带颜色标记的 HTML badge（value 应为展示语言）。"""
+    """生成风险徽章（胶囊形：浅色语义底 + 深色文字，文字+颜色双通道）。
+
+    value 应为展示语言；语义映射与 RISK_COLORS 一致，不改变数据含义。
+    """
     if not value:
         return value
-    color = RISK_COLORS.get(value, "")
-    if color:
-        return f'<span style="color:{color};font-weight:bold">{value}</span>'
-    return value
+    from ui_components import risk_badge, tone_for_value
+    return risk_badge(value, tone_for_value(value))
 
 
 def format_report(report: Optional[Dict]) -> Dict[str, Any]:

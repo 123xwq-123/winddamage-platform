@@ -152,6 +152,23 @@ UI = {
         # 摘要
         "summary_priority": "优先级",
         "summary_no_damage": "未发现损伤",
+
+        # UI v2：摘要卡 / 进度 / 删除确认 / 历史选择
+        "card_risk": "综合风险等级",
+        "card_damage": "损伤类型",
+        "card_priority": "处置优先级",
+        "card_time": "检测时间",
+        "card_cost": "模型耗时",
+        "card_no": "报告编号",
+        "msg_progress": "⏳ 正在分析 {i}/{total}：{name}",
+        "batch_partial": "### 批量检测完成\n\n✅ {ok}/{total} 成功，❌ {failed} 失败",
+        "confirm_clear_label": "我确认清空全部历史记录（不可恢复）",
+        "msg_confirm_first": "⚠️ 请先勾选下方确认框，再点击「清空历史」",
+        "msg_cleared_n": "已删除 {n} 条历史记录",
+        "history_select_label": "选择历史记录",
+        "history_select_hint": "点击「刷新」后，从下拉框选择记录查看详情",
+        "badge_high_risk": "高风险",
+        "badge_normal": "正常",
     },
     "en": {
         "app_title": "Wind Turbine Damage Assessment Platform Based on Multimodal LLM",
@@ -255,6 +272,23 @@ UI = {
 
         "summary_priority": "Priority",
         "summary_no_damage": "No damage detected",
+
+        # UI v2: summary card / progress / delete confirm / history select
+        "card_risk": "Overall Risk",
+        "card_damage": "Damage Type",
+        "card_priority": "Priority",
+        "card_time": "Detected At",
+        "card_cost": "Inference Time",
+        "card_no": "Report ID",
+        "msg_progress": "⏳ Analyzing {i}/{total}: {name}",
+        "batch_partial": "### Batch Analysis Complete\n\n✅ {ok}/{total} succeeded, ❌ {failed} failed",
+        "confirm_clear_label": "I confirm clearing all history (irreversible)",
+        "msg_confirm_first": "⚠️ Please tick the confirmation box before clearing",
+        "msg_cleared_n": "Deleted {n} history records",
+        "history_select_label": "Select a record",
+        "history_select_hint": "Click \"Refresh\", then pick a record to view its details",
+        "badge_high_risk": "High Risk",
+        "badge_normal": "Normal",
     },
 }
 

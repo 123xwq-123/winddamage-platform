@@ -4,10 +4,10 @@
 
 功能：
   - 单图/批量图片上传 → 模型推理 → 结构化报告展示
-  - 高风险自动告警（红色高亮）
-  - 完整 JSON 报告折叠查看
+  - 高风险自动告警（浅底色条横幅，文字+颜色双通道）
+  - 结论摘要卡 + 折叠式分组报告 + 完整 JSON 折叠查看
   - 报告导出（Markdown / JSON）
-  - 检测历史记录（SQLite 存储，可回看）
+  - 检测历史记录（SQLite 存储，下拉选择回看，删除需确认）
   - 统计面板
   - 中 / 英双语界面（--lang en 或 UI_LANG=en 切换英文）
 
@@ -37,31 +37,25 @@ from history import init_db, save_record, list_records, get_record, clear_all, g
 from exporter import save_export
 from charts import charts_html
 from i18n import t as tr, tr_value
+import ui_components as uc
 
 # ─── 全局模型实例 ─────────────────────────────────────────
 _model = None
 
-# ─── 空状态：文件上传框样式 ───────────────────────────────
+# ─── 空状态图标 ───────────────────────────────────────────
+_UPLOAD_ICON_SVG = (
+    "<svg width='52' height='52' viewBox='0 0 24 24' fill='none' stroke='#9AA5B1' "
+    "stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'>"
+    "<path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/>"
+    "<polyline points='17 8 12 3 7 8'/>"
+    "<line x1='12' y1='3' x2='12' y2='15'/>"
+    "</svg>"
+)
+
+
 def _empty_result_html():
-    return (
-        "<div style='border:2px dashed #b8c4d0;border-radius:10px;"
-        "padding:44px 24px;text-align:center;background:#fbfcfd;'>"
-        "<svg width='52' height='52' viewBox='0 0 24 24' fill='none' stroke='#7f9cc4' "
-        "stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round' "
-        "style='margin-bottom:6px;'>"
-        "<path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/>"
-        "<polyline points='17 8 12 3 7 8'/>"
-        "<line x1='12' y1='3' x2='12' y2='15'/>"
-        "</svg>"
-        "<div style='font-size:19px;color:#3a4a5c;margin-bottom:8px;'>"
-        f"{tr('empty_upload')}</div>"
-        "<div style='font-size:14px;color:#8a9ab0;margin-bottom:18px;'>"
-        f"{tr('empty_format')}</div>"
-        "<div style='display:inline-block;padding:8px 30px;background:#125191;"
-        "color:#fff;border-radius:6px;font-size:15px;'>"
-        f"{tr('empty_btn')}</div>"
-        "</div>"
-    )
+    """结果区空状态：图标 + 标题 + 格式说明。"""
+    return uc.empty_state(tr("empty_upload"), tr("empty_format"), _UPLOAD_ICON_SVG)
 
 
 EMPTY_RESULT_HTML = _empty_result_html()
@@ -99,44 +93,72 @@ def _do_inference(image_path):
     return parsed, raw, infer_time
 
 
-def _build_result_html(parsed):
-    """将解析后的 JSON 构建 HTML 展示。"""
+def _summary_card_html(parsed, meta=None):
+    """结果页第一层：结论摘要卡（风险等级/损伤类型/优先级 + 元信息）。"""
+    meta = meta or {}
+    priority_raw = get_field(parsed, i18n.SECTION_CONCLUSION, "巡检优先级") or "—"
+    damage_raw = get_field(parsed, i18n.SECTION_DAMAGE, "损伤类型") or "—"
+    has_damage_raw = get_field(parsed, i18n.SECTION_DAMAGE, "是否存在损伤")
+    high = is_high_risk(parsed)
+    if high:
+        tone = "danger"
+        risk_disp = f'<span class="wd-badge wd-badge-danger">{esc_risk(priority_raw)}</span>'
+    else:
+        tone = "success" if (has_damage_raw or "").strip() != "是" else "warn"
+        risk_disp = esc_risk(tr_value(priority_raw))
+
+    items = [
+        (tr("card_risk"), risk_disp),
+        (tr("card_damage"), uc.risk_badge(tr_value(damage_raw))),
+        (tr("card_priority"), esc_risk(tr_value(priority_raw))),
+    ]
+    if meta.get("timestamp"):
+        items.append((tr("card_time"), uc.esc(meta["timestamp"])))
+    if meta.get("infer_time") is not None:
+        items.append((tr("card_cost"), f"{meta['infer_time']:.1f}s"))
+    if meta.get("record_id"):
+        items.append((tr("card_no"), f"#{meta['record_id']}"))
+    return uc.summary_card(items, tone=tone)
+
+
+def esc_risk(text) -> str:
+    """风险值着色徽章（无法映射时原样转义）。"""
+    from ui_components import tone_for_value
+    text = str(text or "—")
+    return uc.risk_badge(text, tone_for_value(text))
+
+
+def _build_result_html(parsed, meta=None):
+    """将解析后的 JSON 构建为四层结构的 HTML 展示。
+
+    第一层：结论摘要卡；高风险横幅（浅底色条）；
+    第二~三层：折叠式分组报告板块（损伤判定与结论默认展开）；
+    （JSON 技术信息由外层 Accordion 承载。）
+    """
     formatted = format_report(parsed)
     html_parts = []
 
-    if formatted["high_risk"]:
-        html_parts.append(
-            '<div style="background:#FDEDEC;border:2px solid #E74C3C;'
-            'border-radius:8px;padding:12px;margin-bottom:16px;">'
-            '<span style="font-size:18px;font-weight:bold;color:#E74C3C;">'
-            f'{tr("msg_high_risk_banner")}</span></div>'
-        )
+    # 第一层：结论摘要卡
+    html_parts.append(_summary_card_html(parsed, meta))
 
+    # 高风险横幅：浅底 + 左色条 + 图标 + 明确文字
+    if formatted["high_risk"]:
+        html_parts.append(uc.risk_banner(tr("msg_high_risk_banner")))
+
+    # 折叠板块：损伤判定、风险判断、结论建议默认展开
+    open_keys = {i18n.SECTION_DAMAGE, i18n.SECTION_RISK, i18n.SECTION_CONCLUSION}
     for sec in formatted["sections"]:
-        html_parts.append('<div style="margin-bottom:16px;">')
-        html_parts.append(
-            f'<h3 style="color:#125191;border-bottom:2px solid #125191;'
-            f'padding-bottom:4px;">{sec["icon"]} {sec["title"]}</h3>'
-        )
-        html_parts.append('<table style="width:100%;border-collapse:collapse;">')
+        fields = []
         for f in sec["fields"]:
             value_html = f["value"]
             if f["is_risk"] and f["value"] in get_risk_badge_values():
                 value_html = get_risk_badge(f["value"], f["raw_field"])
-            if len(f["value"]) > 30:
-                html_parts.append(
-                    f'<tr><td style="width:140px;padding:4px 8px;color:#555;'
-                    f'vertical-align:top;">{f["label"]}</td>'
-                    f'<td style="padding:4px 8px;">{value_html}</td></tr>'
-                )
-            else:
-                html_parts.append(
-                    f'<tr><td style="width:140px;padding:4px 8px;color:#555;">'
-                    f'{f["label"]}</td>'
-                    f'<td style="padding:4px 8px;font-weight:bold;">'
-                    f'{value_html}</td></tr>'
-                )
-        html_parts.append('</table></div>')
+            fields.append((f["label"], value_html, f["is_risk"]))
+        body = uc.kv_rows(fields)
+        open_ = sec["title"] in open_keys or any(
+            k in str(sec["title"]) for k in ("损伤", "Damage", "风险", "Risk", "结论", "Conclusion")
+        )
+        html_parts.append(uc.sec_details(sec["icon"], sec["title"], body, open_))
 
     return "".join(html_parts), formatted
 
@@ -155,12 +177,16 @@ def get_risk_badge_values():
 def analyze_single(image):
     """单图分析，返回 (summary, detail_html, json_out, status, img_info, md_path, json_path)。"""
     if image is None:
-        return tr("msg_please_upload"), "", "", tr("msg_upload_first"), "", None, None
+        return tr("msg_please_upload"), _empty_result_html(), "", tr("msg_upload_first"), "", None, None
 
     image_path = image if isinstance(image, str) else getattr(image, 'name', str(image))
 
     if not os.path.exists(image_path):
-        return tr("msg_file_not_exist"), "", "", f'{tr("msg_file_not_exist")}: {image_path}', "", None, None
+        return (
+            tr("msg_file_not_exist"),
+            uc.status_banner(f'{uc.esc(tr("msg_file_not_exist"))}: {uc.esc(image_path)}', "error"),
+            "", tr("msg_file_not_exist"), "", None, None,
+        )
 
     img_info = get_image_info(image_path)
 
@@ -171,11 +197,20 @@ def analyze_single(image):
 
         if parsed is None:
             return (
-                tr("msg_parse_fail"), f"<pre>{raw[:2000]}</pre>", raw,
-                tr("msg_infer_parse_fail", t=infer_time), img_info, None, None
+                tr("msg_parse_fail"),
+                uc.status_banner(tr("msg_infer_parse_fail", t=infer_time), "error")
+                + f"<pre style='overflow-x:auto;background:#F0F3F7;padding:12px;border-radius:8px;font-size:12px;'>{uc.esc(raw[:2000])}</pre>",
+                raw, tr("msg_infer_parse_fail", t=infer_time), img_info, None, None,
             )
 
-        detail_html, formatted = _build_result_html(parsed)
+        # 保存历史记录（先拿到记录 ID，用于摘要卡报告编号）
+        record_id = save_record(os.path.basename(image_path), parsed, infer_time, image_path)
+
+        detail_html, formatted = _build_result_html(parsed, meta={
+            "record_id": record_id,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "infer_time": infer_time,
+        })
         summary = format_summary(parsed)
         json_str = formatted["json_str"]
         val = formatted["validation"]
@@ -184,9 +219,6 @@ def analyze_single(image):
         status = (f'✅ {tr("msg_infer_done", t=infer_time)} | '
                   f'{tr("msg_json_ok")} | '
                   f'{tr("msg_completeness")}: {comp}')
-
-        # 保存历史记录
-        save_record(image_name, parsed, infer_time, image_path)
 
         # 导出文件
         md_path = save_export(parsed, image_name, infer_time, fmt="md")
@@ -198,37 +230,64 @@ def analyze_single(image):
         import traceback
         traceback.print_exc()
         return (
-            tr("msg_infer_fail"), f"<pre>{traceback.format_exc()}</pre>", "",
-            tr("msg_error", e=e), img_info, None, None
+            tr("msg_infer_fail"),
+            uc.status_banner(f'{uc.esc(tr("msg_error", e=e))}', "error")
+            + f"<pre style='overflow-x:auto;background:#F0F3F7;padding:12px;border-radius:8px;font-size:12px;'>{uc.esc(traceback.format_exc()[:1500])}</pre>",
+            "", tr("msg_error", e=e), img_info, None, None,
         )
 
 
 # ══════════════════════════════════════════════════════════
-#  Tab 2: 批量检测
+#  Tab 2: 批量检测（生成器：边分析边刷新进度）
 # ══════════════════════════════════════════════════════════
 
 def analyze_batch(files):
-    """批量分析多张图片，返回 (summary_table, detail_html, status)。"""
+    """批量分析多张图片。生成器逐张产出 (summary, table_html, status)，实时刷新进度。"""
     if not files:
-        return "", "", tr("msg_upload_first")
+        yield "", _empty_result_html(), tr("msg_upload_first")
+        return
 
     results = []
-    all_html = []
+    high_flags = []  # 与 results 行一一对应，用于整行风险着色
     status_parts = []
     total = len(files)
     ok_count = 0
+    fail_count = 0
+
+    header = [tr("hdr_image"), tr("hdr_risk"), tr("hdr_damage"), tr("hdr_damage_type"),
+              tr("hdr_component"), tr("hdr_priority"), tr("hdr_time_cost")]
+
+    def render_table():
+        """已完成的行 → 样式化表格。"""
+        rows = []
+        for idx, row in enumerate(results):
+            row_cls = ' class="wd-row-danger"' if high_flags[idx] else ""
+            tds = "".join(
+                f'<td class="wd-num">{c}</td>' if j == 6 else f'<td>{c}</td>'
+                for j, c in enumerate(row)
+            )
+            rows.append(f"<tr{row_cls}>{tds}</tr>")
+        return uc.data_table(header, "".join(rows))
+
+    yield "", uc.status_banner(tr("msg_progress", i=0, total=total, name="…"), "info"), ""
 
     for i, f in enumerate(files):
         image_path = f if isinstance(f, str) else f.name
         image_name = os.path.basename(image_path)
 
+        yield "", uc.status_banner(tr("msg_progress", i=i + 1, total=total, name=uc.esc(image_name)), "info"), \
+              uc.esc("\n".join(status_parts))
+
         try:
-            t0 = time.time()
             parsed, raw, infer_time = _do_inference(image_path)
 
             if parsed is None:
-                results.append([image_name, "❌", "—", "—", "—", f"{infer_time:.1f}s", tr("msg_parse_fail")])
+                fail_count += 1
+                results.append([uc.esc(image_name), "❌", "—", "—", "—", "—", f"{infer_time:.1f}s"])
+                high_flags.append(False)
                 status_parts.append(f'[{i+1}/{total}] {image_name}: ❌ {tr("msg_parse_fail")}')
+                yield tr("batch_partial", ok=ok_count, total=total, failed=fail_count), render_table(), \
+                      uc.esc("\n".join(status_parts))
                 continue
 
             ok_count += 1
@@ -237,15 +296,18 @@ def analyze_batch(files):
             component = tr_value(get_field(parsed, i18n.SECTION_COMPONENT, "构件名称"))
             priority = tr_value(get_field(parsed, i18n.SECTION_CONCLUSION, "巡检优先级"))
 
-            risk_icon = "🔴" if is_high_risk(parsed) else "🟢"
+            high = is_high_risk(parsed)
+            risk_cell = f'<span class="wd-badge wd-badge-{"danger" if high else "success"}">' \
+                        f'{tr("badge_high_risk") if high else tr("badge_normal")}</span>'
             results.append([
-                image_name, risk_icon, has_damage, damage_type,
-                component, priority, f"{infer_time:.1f}s"
+                uc.esc(image_name), risk_cell,
+                uc.risk_badge(has_damage) if has_damage else "—",
+                uc.esc(damage_type) if damage_type else "—",
+                uc.esc(component) if component else "—",
+                uc.risk_badge(priority) if priority else "—",
+                f"{infer_time:.1f}s",
             ])
-
-            # 详情
-            detail_html, _ = _build_result_html(parsed)
-            all_html.append(f"<h3>📷 {image_name}</h3>{detail_html}<hr>")
+            high_flags.append(high)
 
             # 保存历史
             save_record(image_name, parsed, infer_time, image_path)
@@ -253,30 +315,18 @@ def analyze_batch(files):
             status_parts.append(f"[{i+1}/{total}] {image_name}: ✅ {damage_type} | {priority}")
 
         except Exception as e:
-            results.append([image_name, "❌", "—", "—", "—", "—", str(e)[:50]])
+            fail_count += 1
+            results.append([uc.esc(image_name), "❌", "—", "—", "—", "—", uc.esc(str(e)[:50])])
+            high_flags.append(False)
             status_parts.append(f"[{i+1}/{total}] {image_name}: ❌ {e}")
 
-    # 汇总表
-    header = [tr("hdr_image"), tr("hdr_risk"), tr("hdr_damage"), tr("hdr_damage_type"),
-              tr("hdr_component"), tr("hdr_priority"), tr("hdr_time_cost")]
-    table_html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">'
-    table_html += '<tr style="background:#125191;color:white;">'
-    for h in header:
-        table_html += f'<th style="padding:6px 8px;text-align:left;">{h}</th>'
-    table_html += '</tr>'
-    for row in results:
-        table_html += '<tr style="border-bottom:1px solid #ddd;">'
-        for cell in row:
-            table_html += f'<td style="padding:4px 8px;">{cell}</td>'
-        table_html += '</tr>'
-    table_html += '</table>'
+        yield tr("batch_partial", ok=ok_count, total=total, failed=fail_count) if fail_count \
+              else tr("batch_done", ok=ok_count, total=total), \
+              render_table(), uc.esc("\n".join(status_parts))
 
-    summary = tr("batch_done", ok=ok_count, total=total)
-
-    status_text = "\n".join(status_parts)
-    detail_combined = "".join(all_html) if all_html else f"<p style='color:#999;'>{tr('no_detail')}</p>"
-
-    return summary, table_html + detail_combined, status_text
+    final_summary = tr("batch_partial", ok=ok_count, total=total, failed=fail_count) if fail_count \
+        else tr("batch_done", ok=ok_count, total=total)
+    yield final_summary, render_table(), uc.esc("\n".join(status_parts))
 
 
 # ══════════════════════════════════════════════════════════
@@ -284,82 +334,82 @@ def analyze_batch(files):
 # ══════════════════════════════════════════════════════════
 
 def refresh_history():
-    """刷新历史记录表格和统计（含图表）。"""
+    """刷新历史记录表格、统计卡、图表，并填充记录选择下拉框。"""
     records = list_records(50)
     stats = get_stats()
     chart_html = charts_html()
 
-    if not records:
-        no_rec = f"<p style='color:#999;'>{tr('no_records')}</p>"
-        return no_rec, no_rec, chart_html
+    # 记录选择下拉框选项（label：#id | 图片名 | 风险 | 优先级 | 时间）
+    choices = []
+    for r in records:
+        risk_txt = tr("badge_high_risk") if r["high_risk"] else tr("badge_normal")
+        prio = tr_value(r["priority"]) if r["priority"] else "—"
+        label = f'#{r["id"]} | {r["image_name"]} | {risk_txt} | {prio} | {r["timestamp"]}'
+        choices.append((label, str(r["id"])))
 
-    # 统计面板
-    stats_html = f"""
-    <div style="display:flex;gap:16px;margin-bottom:16px;">
-        <div style="background:#EBF5FB;border-radius:8px;padding:12px;text-align:center;flex:1;">
-            <div style="font-size:28px;font-weight:bold;color:#125191;">{stats['total']}</div>
-            <div style="color:#555;">{tr('stat_total')}</div>
-        </div>
-        <div style="background:#FDEDEC;border-radius:8px;padding:12px;text-align:center;flex:1;">
-            <div style="font-size:28px;font-weight:bold;color:#E74C3C;">{stats['high_risk']}</div>
-            <div style="color:#555;">{tr('stat_high_risk')}</div>
-        </div>
-        <div style="background:#FEF9E7;border-radius:8px;padding:12px;text-align:center;flex:1;">
-            <div style="font-size:28px;font-weight:bold;color:#F39C12;">{stats['damaged']}</div>
-            <div style="color:#555;">{tr('stat_damaged')}</div>
-        </div>
-        <div style="background:#E8F8F5;border-radius:8px;padding:12px;text-align:center;flex:1;">
-            <div style="font-size:28px;font-weight:bold;color:#27AE60;">{stats['normal']}</div>
-            <div style="color:#555;">{tr('stat_normal')}</div>
-        </div>
-    </div>
-    """
+    dropdown_update = gr.update(choices=choices, value=choices[0][1] if choices else None)
+
+    if not records:
+        empty = uc.empty_state(tr("no_records"), tr("history_select_hint"), _UPLOAD_ICON_SVG)
+        return empty, empty, chart_html, dropdown_update
+
+    # 统计卡
+    stats_html = (
+        '<div class="wd-stats">'
+        + uc.stat_card(stats["total"], tr("stat_total"))
+        + uc.stat_card(stats["high_risk"], tr("stat_high_risk"), tone="danger")
+        + uc.stat_card(stats["damaged"], tr("stat_damaged"), tone="warn")
+        + uc.stat_card(stats["normal"], tr("stat_normal"), tone="success")
+        + "</div>"
+    )
 
     # 历史表
     header = [tr("hdr_id"), tr("hdr_timestamp"), tr("hdr_image"), tr("hdr_risk"),
               tr("hdr_damage"), tr("hdr_damage_type"), tr("hdr_component"),
               tr("hdr_priority"), tr("hdr_confidence"), tr("hdr_infer_time")]
-    table_html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-    table_html += '<tr style="background:#125191;color:white;">'
-    for h in header:
-        table_html += f'<th style="padding:5px 6px;text-align:left;">{h}</th>'
-    table_html += '</tr>'
+    rows = []
     for r in records:
-        risk = "🔴" if r["high_risk"] else "🟢"
-        row_bg = "#FDEDEC" if r["high_risk"] else ""
-        table_html += f'<tr style="border-bottom:1px solid #ddd;background:{row_bg};">'
-        table_html += f'<td style="padding:4px 6px;">{r["id"]}</td>'
-        table_html += f'<td style="padding:4px 6px;">{r["timestamp"]}</td>'
-        table_html += f'<td style="padding:4px 6px;">{r["image_name"]}</td>'
-        table_html += f'<td style="padding:4px 6px;">{risk}</td>'
-        table_html += f'<td style="padding:4px 6px;">{tr_value(r["has_damage"]) or "—"}</td>'
-        table_html += f'<td style="padding:4px 6px;">{tr_value(r["damage_type"]) or "—"}</td>'
-        table_html += f'<td style="padding:4px 6px;">{tr_value(r["component"]) or "—"}</td>'
-        table_html += f'<td style="padding:4px 6px;">{tr_value(r["priority"]) or "—"}</td>'
-        table_html += f'<td style="padding:4px 6px;">{tr_value(r["confidence"]) or "—"}</td>'
-        table_html += f'<td style="padding:4px 6px;">{r["infer_time"] or "—"}s</td>'
-        table_html += '</tr>'
-    table_html += '</table>'
+        risk_cell = (
+            f'<span class="wd-badge wd-badge-{"danger" if r["high_risk"] else "success"}">'
+            f'{tr("badge_high_risk") if r["high_risk"] else tr("badge_normal")}</span>'
+        )
+        row_cls = ' class="wd-row-danger"' if r["high_risk"] else ""
+        cells = [
+            f'<td class="wd-num">{r["id"]}</td>',
+            f'<td class="wd-num">{uc.esc(r["timestamp"])}</td>',
+            f"<td>{uc.esc(r['image_name'])}</td>",
+            f"<td>{risk_cell}</td>",
+            f"<td>{uc.risk_badge(tr_value(r['has_damage'])) if r['has_damage'] else '—'}</td>",
+            f"<td>{uc.esc(tr_value(r['damage_type'])) if r['damage_type'] else '—'}</td>",
+            f"<td>{uc.esc(tr_value(r['component'])) if r['component'] else '—'}</td>",
+            f"<td>{uc.risk_badge(tr_value(r['priority'])) if r['priority'] else '—'}</td>",
+            f"<td>{uc.esc(tr_value(r['confidence'])) if r['confidence'] else '—'}</td>",
+            f'<td class="wd-num">{r["infer_time"] or "—"}s</td>',
+        ]
+        rows.append(f"<tr{row_cls}>{''.join(cells)}</tr>")
+    table_html = uc.data_table(header, "".join(rows))
 
-    return stats_html, table_html, chart_html
+    return stats_html, table_html, chart_html, dropdown_update
 
 
 def view_history_detail(record_id_str):
-    """查看单条历史记录详情。"""
-    if not record_id_str or not record_id_str.strip().isdigit():
-        return f"<p style='color:#999;'>{tr('msg_invalid_id')}</p>", ""
+    """查看单条历史记录详情（记录由下拉框选择，替代手输 ID）。"""
+    if not record_id_str or not str(record_id_str).strip().isdigit():
+        return uc.status_banner(tr("msg_invalid_id"), "warn"), ""
 
-    record = get_record(int(record_id_str.strip()))
+    record = get_record(int(str(record_id_str).strip()))
     if not record:
-        return f"<p style='color:#E74C3C;'>{tr('msg_record_not_found', id=record_id_str)}</p>", ""
+        return uc.status_banner(tr("msg_record_not_found", id=record_id_str), "error"), ""
 
     report = json.loads(record["json_report"])
-    detail_html, formatted = _build_result_html(report)
-
-    header = f"<h3>📷 {record['image_name']} — {record['timestamp']}</h3>"
+    detail_html, formatted = _build_result_html(report, meta={
+        "record_id": record["id"],
+        "timestamp": record["timestamp"],
+        "infer_time": record["infer_time"] or 0,
+    })
     json_str = formatted["json_str"]
 
-    return header + detail_html, json_str
+    return detail_html, json_str
 
 
 def copy_json(json_str):
@@ -369,11 +419,15 @@ def copy_json(json_str):
     return tr("msg_no_json")
 
 
-def do_clear_history():
-    """清空历史记录。"""
+def do_clear_history(confirmed):
+    """清空历史记录（需勾选确认框；未勾选则提示并保留数据）。"""
+    if not confirmed:
+        stats_html, table_html, chart_html, dropdown_update = refresh_history()
+        return stats_html, table_html, chart_html, dropdown_update, "", tr("msg_confirm_first")
+    n = get_stats()["total"]
     clear_all()
-    stats_html, table_html, chart_html = refresh_history()
-    return stats_html, table_html, chart_html, tr("msg_cleared")
+    stats_html, table_html, chart_html, dropdown_update = refresh_history()
+    return stats_html, table_html, chart_html, dropdown_update, "", tr("msg_cleared_n", n=n)
 
 
 # ══════════════════════════════════════════════════════════
@@ -381,18 +435,7 @@ def do_clear_history():
 # ══════════════════════════════════════════════════════════
 
 def build_ui():
-    with gr.Blocks(
-        title=tr("app_title"),
-        theme=gr.themes.Soft(primary_hue="blue"),
-        css="""
-        .main-title { text-align: center; padding: 12px 0 4px; }
-        .main-title h1 { font-size: 26px; color: #125191; margin-bottom: 4px; }
-        .title-icon { display: inline-flex; vertical-align: -6px; margin-right: 6px; }
-        .footer-note { text-align: center; color: #999; font-size: 12px; padding: 10px 0 4px; margin-top: 8px; }
-        .status-bar { font-family: monospace; }
-        footer { display: none !important; }
-        """,
-    ) as app:
+    with gr.Blocks(title=tr("app_title")) as app:
         # 标题（含 SVG 风电机组图标）
         gr.Markdown(
             "<div class='main-title'>"
@@ -440,7 +483,7 @@ def build_ui():
                         if examples:
                             gr.Examples(examples=examples, inputs=img_input, label=tr("examples_label") % len(examples))
 
-                        status_text = gr.Textbox(label=tr("status_label"), interactive=False, elem_classes=["status-bar"])
+                        status_text = gr.Textbox(label=tr("status_label"), interactive=False)
 
                         with gr.Row():
                             btn_export_md = gr.Button(tr("btn_export_md"))
@@ -476,7 +519,8 @@ def build_ui():
             with gr.TabItem(tr("tab_history")):
                 with gr.Row():
                     btn_refresh = gr.Button(tr("btn_refresh"), variant="primary")
-                    btn_clear_history = gr.Button(tr("btn_clear_history"), variant="stop")
+                    btn_clear_history = gr.Button(tr("btn_clear_history"), variant="stop",
+                                                  elem_classes=["wd-btn-danger"])
 
                 history_stats = gr.HTML(value=tr("history_hint"))
                 history_charts = gr.HTML(value=tr("charts_hint"))
@@ -484,13 +528,19 @@ def build_ui():
 
                 gr.Markdown(tr("detail_section"))
                 with gr.Row():
-                    history_id_input = gr.Textbox(label=tr("id_label"), placeholder=tr("id_placeholder"))
+                    history_record_dd = gr.Dropdown(
+                        label=tr("history_select_label"),
+                        choices=[], interactive=True,
+                        info=tr("history_select_hint"),
+                    )
                     btn_view_detail = gr.Button(tr("btn_view_detail"), variant="primary")
                     btn_copy_history_json = gr.Button(tr("btn_copy_json"))
 
                 history_detail = gr.HTML(value=tr("detail_hint"))
                 with gr.Accordion(tr("json_accordion2"), open=False):
                     history_json = gr.Code(language="json", interactive=False)
+
+                clear_confirm = gr.Checkbox(label=tr("confirm_clear_label"), value=False)
 
         # ─── 事件绑定 ───
         # Tab 1
@@ -523,9 +573,21 @@ def build_ui():
         )
 
         # Tab 3
-        btn_refresh.click(fn=refresh_history, outputs=[history_stats, history_table, history_charts])
-        btn_clear_history.click(fn=do_clear_history, outputs=[history_stats, history_table, history_charts, batch_status])
-        btn_view_detail.click(fn=view_history_detail, inputs=[history_id_input], outputs=[history_detail, history_json])
+        btn_refresh.click(
+            fn=refresh_history,
+            outputs=[history_stats, history_table, history_charts, history_record_dd],
+        )
+        btn_clear_history.click(
+            fn=do_clear_history,
+            inputs=[clear_confirm],
+            outputs=[history_stats, history_table, history_charts, history_record_dd,
+                     clear_confirm, batch_status],
+        )
+        btn_view_detail.click(
+            fn=view_history_detail,
+            inputs=[history_record_dd],
+            outputs=[history_detail, history_json],
+        )
         btn_copy_history_json.click(
             fn=copy_json,
             inputs=[history_json],
@@ -557,4 +619,6 @@ if __name__ == "__main__":
         server_port=server_port,
         share=False,
         show_error=True,
+        theme=gr.themes.Soft(primary_hue="blue"),  # Gradio 6：theme/css 移至 launch()
+        css=uc.BASE_CSS,
     )
