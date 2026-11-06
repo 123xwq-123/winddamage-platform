@@ -233,6 +233,67 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
 @media (prefers-reduced-motion: reduce) {
   * { transition:none !important; animation:none !important; }
 }
+
+/* ── 认证页（登录/注册/初始化，§10）────────────────── */
+.wd-auth-wrap { min-height:calc(100vh - 40px); display:flex; align-items:center;
+  justify-content:center; padding:20px 16px; }
+.wd-auth-card { width:100%; max-width:400px; background:var(--bg-card);
+  border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-2);
+  padding:28px 26px 24px; }
+.wd-auth-card h1 { font-size:20px; margin:0 0 4px; color:var(--text-1);
+  display:flex; align-items:center; gap:8px; }
+.wd-auth-sub { font-size:13px; color:var(--text-3); margin:0 0 18px; line-height:1.5; }
+.wd-field { margin-bottom:14px; }
+.wd-field label { display:block; font-size:13px; color:var(--text-2);
+  font-weight:600; margin-bottom:5px; }
+.wd-field input[type="text"], .wd-field input[type="password"] {
+  width:100%; box-sizing:border-box; padding:10px 12px; font-size:14px;
+  border:1px solid var(--border); border-radius:8px; background:#fff;
+  color:var(--text-1); }
+.wd-field input:focus { outline:2px solid var(--brand-500); outline-offset:1px;
+  border-color:var(--brand-500); }
+.wd-field-row { display:flex; align-items:center; justify-content:space-between;
+  margin-top:6px; font-size:12px; color:var(--text-3); }
+.wd-field-row label { font-weight:400; display:flex; align-items:center; gap:5px;
+  margin:0; cursor:pointer; }
+.wd-form-error { color:#C0392B; font-size:13px; margin:2px 0 10px; line-height:1.45; }
+.wd-pw-rules { list-style:none; margin:8px 0 0; padding:0; font-size:12px; }
+.wd-pw-rules li { color:var(--text-3); margin-bottom:3px; }
+.wd-pw-rules li::before { content:"○ "; }
+.wd-pw-rules li.wd-rule-ok { color:#1E8449; }
+.wd-pw-rules li.wd-rule-ok::before { content:"● "; }
+.wd-auth-alt { margin-top:16px; padding-top:14px; border-top:1px solid var(--border);
+  font-size:13px; color:var(--text-3); }
+.wd-auth-alt a { color:var(--brand-500); font-weight:600; text-decoration:none; }
+.wd-auth-alt a:hover { text-decoration:underline; }
+.wd-btn-primary-block { width:100%; padding:11px 0; font-size:15px; font-weight:600;
+  background:var(--brand-700); color:#fff; border:none; border-radius:8px;
+  cursor:pointer; margin-top:6px; }
+.wd-btn-primary-block:hover { background:var(--brand-500); }
+.wd-auth-banner { max-width:400px; margin:0 auto 12px; border-radius:8px;
+  padding:10px 14px; font-size:13px; line-height:1.5; }
+.wd-auth-banner.wd-banner-warn { background:#FEF5E7; border:1px solid #F5B041; color:#7E5109; }
+.wd-auth-banner.wd-banner-error { background:var(--danger-bg, #FDEDEC); border:1px solid #EC7063; color:#943126; }
+
+/* ── 用户管理表 ────────────────────────────────────── */
+.wd-users-wrap { max-width:var(--reading-max, 880px); margin:0 auto; padding:24px 16px; }
+.wd-users-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.wd-users-actions form { display:inline-flex; gap:6px; align-items:center; }
+.wd-users-actions button, .wd-users-actions input[type="submit"] {
+  font-size:12px; padding:5px 10px; border:1px solid var(--border); border-radius:6px;
+  background:var(--bg-card); color:var(--brand-700); cursor:pointer; }
+.wd-users-actions .wd-u-danger { color:#C0392B; border-color:#EC7063; }
+.wd-users-actions input[type="password"] { padding:4px 8px; font-size:12px;
+  border:1px solid var(--border); border-radius:6px; width:170px; }
+
+/* ── 顶栏用户徽章 ──────────────────────────────────── */
+.wd-user-badge { display:flex; gap:12px; align-items:center; justify-content:flex-end;
+  max-width:1280px; margin:0 auto; padding:8px 16px 0; font-size:13px; min-height:22px; }
+.wd-user-badge:empty { display:none; }
+.wd-user-badge a { color:var(--brand-500); font-weight:600; text-decoration:none; }
+.wd-user-badge a:hover { text-decoration:underline; }
+.wd-user-badge .wd-ub-name { font-weight:600; color:var(--text-2);
+  max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 """
 
 

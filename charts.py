@@ -16,7 +16,7 @@ matplotlib.use("Agg")  # 无界面后端
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
 
-from history import DB_PATH
+from history import _db_path
 import i18n
 from i18n import t as tr, tr_value
 
@@ -56,20 +56,25 @@ def _fig_to_base64(fig):
     return base64.b64encode(buf.read()).decode("ascii")
 
 
-def _load_records():
-    """从数据库读取全部检测记录。"""
-    conn = sqlite3.connect(DB_PATH)
+def _load_records(owner_user_id=None):
+    """从数据库读取检测记录（owner_user_id=None 查全部，即 admin 视角）。"""
+    conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
-    rows = conn.execute(
-        "SELECT damage_type, priority, high_risk, has_damage FROM detections"
-    ).fetchall()
+    if owner_user_id is None:
+        rows = conn.execute(
+            "SELECT damage_type, priority, high_risk, has_damage FROM detections"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT damage_type, priority, high_risk, has_damage FROM detections "
+            "WHERE owner_user_id = ?", (owner_user_id,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def damage_type_chart() -> str:
+def damage_type_chart(owner_user_id=None) -> str:
     """损伤类型分布饼图，返回 base64 PNG。"""
-    records = _load_records()
+    records = _load_records(owner_user_id)
     counter = Counter()
     for r in records:
         dt = (r.get("damage_type") or "—").strip()
@@ -108,9 +113,9 @@ def damage_type_chart() -> str:
     return _fig_to_base64(fig)
 
 
-def priority_chart() -> str:
+def priority_chart(owner_user_id=None) -> str:
     """巡检优先级分布柱状图，返回 base64 PNG。"""
-    records = _load_records()
+    records = _load_records(owner_user_id)
     order_zh = ["低", "中", "高"]
     order_en = ["Low", "Medium", "High"]
     order_disp = order_en if i18n.LANG == "en" else order_zh
@@ -138,13 +143,18 @@ def priority_chart() -> str:
     return _fig_to_base64(fig)
 
 
-def trend_chart() -> str:
+def trend_chart(owner_user_id=None) -> str:
     """检测数量趋势图（按日期），返回 base64 PNG。"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(_db_path())
     conn.row_factory = sqlite3.Row
-    rows = conn.execute(
-        "SELECT date(timestamp) as d FROM detections ORDER BY timestamp"
-    ).fetchall()
+    if owner_user_id is None:
+        rows = conn.execute(
+            "SELECT date(timestamp) as d FROM detections ORDER BY timestamp"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT date(timestamp) as d FROM detections WHERE owner_user_id = ? "
+            "ORDER BY timestamp", (owner_user_id,)).fetchall()
     conn.close()
     if not rows:
         return ""
@@ -168,11 +178,14 @@ def trend_chart() -> str:
     return _fig_to_base64(fig)
 
 
-def charts_html() -> str:
-    """生成图表区 HTML（三图并排，设计系统卡片样式），无数据时返回占位。"""
-    dmg = damage_type_chart()
-    pri = priority_chart()
-    trd = trend_chart()
+def charts_html(owner_user_id=None) -> str:
+    """生成图表区 HTML（三图并排，设计系统卡片样式），无数据时返回占位。
+
+    owner_user_id=None → 全量（admin）；传 user_id → 仅该用户数据。
+    """
+    dmg = damage_type_chart(owner_user_id)
+    pri = priority_chart(owner_user_id)
+    trd = trend_chart(owner_user_id)
 
     if not dmg and not pri and not trd:
         return (f"<p style='color:#9AA5B1;text-align:center;padding:20px;'>"

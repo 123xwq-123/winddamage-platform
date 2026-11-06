@@ -34,7 +34,9 @@ from inference import WindDamageModel
 from parser import parse_json_pred, validate_report, get_field
 from formatter import format_report, format_summary, get_risk_badge, is_high_risk
 from history import (init_db, save_record, query_records, get_record, clear_all,
-                     get_stats, can_access, update_note, delete_record)
+                     clear_user_records, get_stats, can_access, update_note,
+                     delete_record)
+from auth import user_for_request
 from exporter import save_export
 from charts import charts_html
 from i18n import t as tr, tr_value
@@ -175,7 +177,7 @@ def get_risk_badge_values():
 #  Tab 1: 单图检测
 # ══════════════════════════════════════════════════════════
 
-def analyze_single(image):
+def analyze_single(image, request: gr.Request = None):
     """单图分析，返回 (summary, detail_html, json_out, status, img_info, md_path, json_path)。"""
     if image is None:
         return tr("msg_please_upload"), _empty_result_html(), "", tr("msg_upload_first"), "", None, None
@@ -204,9 +206,11 @@ def analyze_single(image):
                 raw, tr("msg_infer_parse_fail", t=infer_time), img_info, None, None,
             )
 
-        # 保存历史记录（先拿到记录 ID，用于摘要卡报告编号）
+        # 保存历史记录（先拿到记录 ID，用于摘要卡报告编号；归属当前登录用户）
+        owner_id, created_by = _scope_owner(request)
         record_id = save_record(os.path.basename(image_path), parsed, infer_time,
-                                image_path, source="ui", persist_image=True)
+                                image_path, source="ui", persist_image=True,
+                                owner_user_id=owner_id, created_by=created_by)
 
         detail_html, formatted = _build_result_html(parsed, meta={
             "record_id": record_id,
@@ -243,11 +247,13 @@ def analyze_single(image):
 #  Tab 2: 批量检测（生成器：边分析边刷新进度）
 # ══════════════════════════════════════════════════════════
 
-def analyze_batch(files):
+def analyze_batch(files, request: gr.Request = None):
     """批量分析多张图片。生成器逐张产出 (summary, table_html, status)，实时刷新进度。"""
     if not files:
         yield "", _empty_result_html(), tr("msg_upload_first")
         return
+
+    owner_id, created_by = _scope_owner(request)
 
     results = []
     high_flags = []  # 与 results 行一一对应，用于整行风险着色
@@ -311,9 +317,10 @@ def analyze_batch(files):
             ])
             high_flags.append(high)
 
-            # 保存历史
+            # 保存历史（归属当前登录用户）
             save_record(image_name, parsed, infer_time, image_path,
-                        source="batch", persist_image=True)
+                        source="batch", persist_image=True,
+                        owner_user_id=owner_id, created_by=created_by)
 
             status_parts.append(f"[{i+1}/{total}] {image_name}: ✅ {damage_type} | {priority}")
 
@@ -336,13 +343,29 @@ def analyze_batch(files):
 #  Tab 3: 历史记录（筛选 / 排序 / 分页 / 分级删除 / 移动卡片）
 # ══════════════════════════════════════════════════════════
 
-def _current_scope():
-    """当前会话的数据范围（user_id, is_admin）。
+def _current_scope(request=None):
+    """当前会话的数据范围 (user_id, is_admin)。
 
-    认证阶段（阶段3）将替换为从会话解析真实用户；
-    当前占位：全量可见（与升级前行为一致）。
+    - request 带 gr.Request 注解时由 gradio 注入真实请求 → 从会话 Cookie 解析用户；
+    - request=None（单元测试 / 直接函数调用）：保持 (None, True) 兼容旧离线行为，
+      生产路由全部经过登录中间件，不会出现 None 请求。
     """
-    return None, True
+    if request is None:
+        return None, True
+    user = user_for_request(request)
+    if not user:
+        return None, False
+    return user["id"], user.get("role") == "admin"
+
+
+def _scope_owner(request=None):
+    """(owner_user_id, username)：用于 save_record 归属。"""
+    if request is None:
+        return None, None
+    user = user_for_request(request)
+    if not user:
+        return None, None
+    return user["id"], user.get("username")
 
 
 def _valid_date(s: str) -> bool:
@@ -408,7 +431,8 @@ def _history_list_html(records, total, filtered):
     )
 
 
-def query_history(search, risk, date_from, date_to, sort, page_size, page):
+def query_history(search, risk, date_from, date_to, sort, page_size, page,
+                  request: gr.Request = None):
     """按筛选/排序/分页查询历史。返回 (stats_html, list_html, page_info, dd_update, status)。"""
     search = (search or "").strip()
     date_from = (date_from or "").strip()
@@ -416,7 +440,11 @@ def query_history(search, risk, date_from, date_to, sort, page_size, page):
     if (date_from and not _valid_date(date_from)) or (date_to and not _valid_date(date_to)):
         return "", tr("msg_invalid_date"), tr("page_info", page=1, pages=1, total=0), gr.update(), ""
 
-    user_id, is_admin = _current_scope()
+    user_id, is_admin = _current_scope(request)
+    if user_id is None and not is_admin:
+        # 未登录：绝不返回全量数据（scope=None 会被当作 admin 视角）
+        return "", uc.empty_state(tr("auth_need_login"), ""), \
+               tr("page_info", page=1, pages=1, total=0), gr.update(), ""
     scope = None if is_admin else user_id
     try:
         page_size = int(page_size)
@@ -475,13 +503,13 @@ def refresh_history():
     return stats_html, list_html, page_info, dd, chart_html
 
 
-def view_history_detail(record_id_str):
+def view_history_detail(record_id_str, request: gr.Request = None):
     """查看单条历史记录详情（含独立页链接、备注回填）。"""
     empty_json = ""
     if not record_id_str or not str(record_id_str).strip().isdigit():
         return uc.status_banner(tr("msg_invalid_id"), "warn"), empty_json, ""
 
-    user_id, is_admin = _current_scope()
+    user_id, is_admin = _current_scope(request)
     record = get_record(int(str(record_id_str).strip()))
     if not record:
         return uc.status_banner(tr("msg_record_not_found", id=record_id_str), "error"), empty_json, ""
@@ -500,11 +528,11 @@ def view_history_detail(record_id_str):
     return link + detail_html, formatted["json_str"], record.get("note") or ""
 
 
-def save_note(record_id_str, note):
+def save_note(record_id_str, note, request: gr.Request = None):
     """保存所选记录的备注（校验归属权限）。"""
     if not record_id_str or not str(record_id_str).strip().isdigit():
         return tr("msg_invalid_id")
-    user_id, is_admin = _current_scope()
+    user_id, is_admin = _current_scope(request)
     record = get_record(int(str(record_id_str).strip()))
     if not record or not can_access(record, user_id, is_admin):
         return tr("msg_record_no_access")
@@ -519,23 +547,26 @@ def copy_json(json_str):
     return tr("msg_no_json")
 
 
-def ask_delete_record(record_id_str):
+def ask_delete_record(record_id_str, request: gr.Request = None):
     """单条删除第一步：显示确认条（分级确认：单条不需勾选，但需二次点击）。"""
     if not record_id_str or not str(record_id_str).strip().isdigit():
         return tr("msg_invalid_id"), gr.update(visible=False)
     rid = int(str(record_id_str).strip())
     rec = get_record(rid)
-    name = rec["image_name"] if rec else "—"
+    user_id, is_admin = _current_scope(request)
+    if not rec or not can_access(rec, user_id, is_admin):
+        return tr("msg_record_no_access"), gr.update(visible=False)
+    name = rec["image_name"]
     msg = f"⚠️ {tr('msg_delete_confirm_one', id=rid, name=uc.esc(name))}"
     return (f'<div class="wd-banner" style="margin-bottom:0;">'
             f'<span class="wd-banner-text">{msg}</span></div>'), gr.update(visible=True)
 
 
-def do_delete_record(record_id_str):
+def do_delete_record(record_id_str, request: gr.Request = None):
     """单条删除第二步：确认后执行删除并刷新。"""
     if record_id_str and str(record_id_str).strip().isdigit():
         rid = int(str(record_id_str).strip())
-        user_id, is_admin = _current_scope()
+        user_id, is_admin = _current_scope(request)
         rec = get_record(rid)
         if rec and can_access(rec, user_id, is_admin):
             delete_record(rid)
@@ -544,22 +575,35 @@ def do_delete_record(record_id_str):
             status = tr("msg_record_no_access")
     else:
         status = tr("msg_invalid_id")
-    stats_html, list_html, page_info, dd, _ = query_history("", "", "", "", "time_desc", 20, 1)
+    stats_html, list_html, page_info, dd, _ = query_history(
+        "", "", "", "", "time_desc", 20, 1, request=request)
     return stats_html, list_html, page_info, dd, gr.update(visible=False), status
 
 
-def do_clear_history(typed):
-    """清空全部记录：需输入「确认清空」文字（分级删除最高档）。"""
+def do_clear_history(typed, request: gr.Request = None):
+    """清空记录：需输入「确认清空」文字（分级删除最高档）。
+
+    权限模型：admin 清空全库；普通用户只清空自己的记录。
+    """
     typed = (typed or "").strip()
-    total = get_stats()["total"]
+    user_id, is_admin = _current_scope(request)
+    if user_id is None and not is_admin:
+        return "", "", "", gr.update(), "", tr("auth_need_login")
+    scope = None if is_admin else user_id
+    total = get_stats(scope)["total"]
     if total == 0:
-        stats_html, list_html, page_info, dd, _ = query_history("", "", "", "", "time_desc", 20, 1)
+        stats_html, list_html, page_info, dd, _ = query_history(
+            "", "", "", "", "time_desc", 20, 1, request=request)
         return stats_html, list_html, page_info, dd, "", tr("msg_confirm_first")
     if typed != tr("clear_typed_word"):
         return "", "", "", gr.update(), "", tr("msg_clear_typed_wrong")
     n = total
-    clear_all()
-    stats_html, list_html, page_info, dd, _ = query_history("", "", "", "", "time_desc", 20, 1)
+    if is_admin:
+        clear_all()
+    else:
+        clear_user_records(user_id)
+    stats_html, list_html, page_info, dd, _ = query_history(
+        "", "", "", "", "time_desc", 20, 1, request=request)
     return stats_html, list_html, page_info, dd, "", tr("msg_deleted_n", n=n)
 
 
@@ -567,8 +611,34 @@ def do_clear_history(typed):
 #  Gradio 界面
 # ══════════════════════════════════════════════════════════
 
+# 顶栏用户徽章：页面加载后从 /api/me 拉取当前会话用户（server.py 提供）
+_BADGE_JS = """
+() => {
+  fetch('/api/me').then(r => r.ok ? r.json() : null).then(u => {
+    const el = document.getElementById('wd-user-badge');
+    if (!el || !u || !u.username) return;
+    const role = u.role === 'admin' ? '__ROLE_ADMIN__' : '__ROLE_USER__';
+    el.innerHTML =
+      '<span class="wd-ub-name" title="' + u.username + '">' + u.username + '</span>'
+      + '<span class="wd-badge wd-badge-muted">' + role + '</span>'
+      + (u.role === 'admin' ? '<a href="/users">__USERS_LINK__</a>' : '')
+      + '<a href="/change-password">__PW_LINK__</a>'
+      + '<a href="/logout">__LOGOUT_LINK__</a>';
+  }).catch(() => {});
+}
+"""
+
+
 def build_ui():
+    badge_js = (_BADGE_JS
+                .replace("__ROLE_ADMIN__", tr("users_role_admin"))
+                .replace("__ROLE_USER__", tr("users_role_user"))
+                .replace("__USERS_LINK__", tr("users_link"))
+                .replace("__PW_LINK__", tr("pw_link"))
+                .replace("__LOGOUT_LINK__", tr("btn_logout")))
     with gr.Blocks(title=tr("app_title")) as app:
+        # 顶栏用户徽章（内容由上面的 JS 注入）
+        gr.HTML('<div id="wd-user-badge" class="wd-user-badge"></div>')
         # 标题（含 SVG 风电机组图标）
         gr.Markdown(
             "<div class='main-title'>"
@@ -765,8 +835,10 @@ def build_ui():
         QUERY_OUTPUTS = [history_stats, history_list, page_info_html,
                          history_record_dd, filter_status]
 
-        def _run_query(search, risk, df, dt, sort, psize, page):
-            return query_history(search, risk, df, dt, sort, psize, page)
+        def _run_query(search, risk, df, dt, sort, psize, page,
+                       request: gr.Request = None):
+            return query_history(search, risk, df, dt, sort, psize, page,
+                                 request=request)
 
         btn_apply.click(fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS)
         search_tb.submit(fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS)
@@ -796,11 +868,16 @@ def build_ui():
                             inputs=[page_state], outputs=page_state).then(
             fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS)
 
-        # 首次加载 / 手动刷新
+        # 首次加载 / 手动刷新（图表同样按当前用户范围）
+        def _charts_for(request: gr.Request = None):
+            user_id, is_admin = _current_scope(request)
+            scope = None if is_admin else user_id
+            return charts_html(owner_user_id=scope)
+
         btn_refresh.click(fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS).then(
-            fn=lambda: charts_html(), inputs=[], outputs=[history_charts])
+            fn=_charts_for, inputs=[], outputs=[history_charts])
         app.load(fn=_run_query, inputs=QUERY_INPUTS, outputs=QUERY_OUTPUTS).then(
-            fn=lambda: charts_html(), inputs=[], outputs=[history_charts])
+            fn=_charts_for, inputs=[], outputs=[history_charts])
 
         # 详情
         btn_view_detail.click(
@@ -846,6 +923,8 @@ def build_ui():
         "</div>"
     )
 
+    # gradio 6：js 参数在 launch()/mount_gradio_app() 上传入（页面加载后注入用户徽章）
+    app._wd_badge_js = badge_js
     return app
 
 
