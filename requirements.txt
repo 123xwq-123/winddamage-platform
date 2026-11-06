@@ -15,6 +15,11 @@ torchvision
 # Qwen 视觉处理工具
 qwen-vl-utils
 
+# --- 报告导出（阶段4， DEVELOPMENT_PLAN.md §11）---
+reportlab==5.1.0     # PDF（中文用内置 CID 字体 STSong-Light）
+python-docx==1.2.0   # Word
+openpyxl==3.1.5      # Excel
+
 # --- 前端 ---
 gradio>=4.0.0
 

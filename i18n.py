@@ -138,6 +138,56 @@ UI = {
         "export_time": "生成时间",
         "export_image_name": "图片名称",
         "export_infer_time": "推理耗时",
+        "export_record_no": "记录编号",
+        "export_time_detect": "检测时间",
+        "export_csv_section": "类别",
+        "export_csv_item": "项目",
+        "export_csv_value": "内容",
+        "preset_standard": "标准报告（基本信息 + 检测结果 + 风险分析 + 处置建议）",
+        "preset_brief": "简版报告（摘要 + 结论）",
+        "preset_full": "完整技术报告（全部字段 + 原始 JSON + 备注）",
+        "preset_standard_short": "标准报告",
+        "preset_brief_short": "简版报告",
+        "preset_full_short": "完整技术报告",
+        "export_section": "报告导出",
+        "export_fmt_label": "导出格式",
+        "fmt_pdf": "PDF（打印 / 归档）",
+        "fmt_docx": "Word（继续编辑）",
+        "fmt_xlsx": "Excel（数据统计）",
+        "fmt_csv": "CSV（系统处理）",
+        "export_preset_label": "内容范围",
+        "export_lang_label": "报告语言",
+        "export_lang_auto": "跟随界面",
+        "export_lang_zh": "中文",
+        "export_lang_en": "English",
+        "btn_start_export": "开始导出",
+        "export_msg_done": "✅ 导出成功，可在下方任务列表下载",
+        "export_msg_failed": "❌ 导出失败：{error}",
+        "export_msg_no_access": "⚠️ 无权导出该记录",
+        "export_msg_need_record": "请先在上方选择一条检测记录",
+        "export_center_title": "导出任务",
+        "tasks_none": "暂无导出任务",
+        "tasks_col_file": "文件",
+        "tasks_col_fmt": "格式",
+        "tasks_col_created": "创建时间",
+        "tasks_col_status": "状态",
+        "tasks_col_expires": "过期时间",
+        "tasks_col_actions": "操作",
+        "task_status_pending": "排队中",
+        "task_status_running": "生成中",
+        "task_status_done": "成功",
+        "task_status_failed": "失败",
+        "task_status_expired": "文件已过期",
+        "task_expires_note": "{date} 自动过期",
+        "btn_task_download": "下载",
+        "btn_task_retry": "重新生成",
+        "btn_task_delete": "删除记录",
+        "btn_task_refresh": "刷新任务",
+        "task_select_label": "选择任务",
+        "msg_task_deleted": "🗑️ 任务记录已删除",
+        "msg_task_need_select": "请先在上方选择一条任务",
+        "msg_task_download_done": "✅ 文件已就绪，请从下载控件保存",
+        "msg_task_forbidden": "⚠️ 无权操作该任务",
 
         # 图表
         "chart_damage_title": "损伤类型分布",
@@ -389,6 +439,56 @@ UI = {
         "export_time": "Generated at",
         "export_image_name": "Image",
         "export_infer_time": "Inference time",
+        "export_record_no": "Record No.",
+        "export_time_detect": "Detected at",
+        "export_csv_section": "Category",
+        "export_csv_item": "Item",
+        "export_csv_value": "Content",
+        "preset_standard": "Standard report (basic info + results + risk analysis + recommendations)",
+        "preset_brief": "Brief report (summary + conclusions)",
+        "preset_full": "Full technical report (all fields + raw JSON + notes)",
+        "preset_standard_short": "Standard",
+        "preset_brief_short": "Brief",
+        "preset_full_short": "Full technical",
+        "export_section": "Report Export",
+        "export_fmt_label": "Format",
+        "fmt_pdf": "PDF (print / archive)",
+        "fmt_docx": "Word (keep editing)",
+        "fmt_xlsx": "Excel (data analysis)",
+        "fmt_csv": "CSV (system processing)",
+        "export_preset_label": "Content scope",
+        "export_lang_label": "Report language",
+        "export_lang_auto": "Follow UI",
+        "export_lang_zh": "中文",
+        "export_lang_en": "English",
+        "btn_start_export": "Start export",
+        "export_msg_done": "✅ Exported. Download it from the task list below",
+        "export_msg_failed": "❌ Export failed: {error}",
+        "export_msg_no_access": "⚠️ No permission to export this record",
+        "export_msg_need_record": "Select a detection record above first",
+        "export_center_title": "Export tasks",
+        "tasks_none": "No export tasks yet",
+        "tasks_col_file": "File",
+        "tasks_col_fmt": "Format",
+        "tasks_col_created": "Created",
+        "tasks_col_status": "Status",
+        "tasks_col_expires": "Expires",
+        "tasks_col_actions": "Actions",
+        "task_status_pending": "Queued",
+        "task_status_running": "Running",
+        "task_status_done": "Done",
+        "task_status_failed": "Failed",
+        "task_status_expired": "File expired",
+        "task_expires_note": "Expires {date}",
+        "btn_task_download": "Download",
+        "btn_task_retry": "Regenerate",
+        "btn_task_delete": "Delete record",
+        "btn_task_refresh": "Refresh",
+        "task_select_label": "Select task",
+        "msg_task_deleted": "🗑️ Task record deleted",
+        "msg_task_need_select": "Select a task above first",
+        "msg_task_download_done": "✅ File ready — save it via the download control",
+        "msg_task_forbidden": "⚠️ No permission for this task",
 
         "chart_damage_title": "Distribution of Damage Types",
         "chart_priority_title": "Distribution of Inspection Priority",
@@ -617,9 +717,9 @@ FIELD_LABELS_EN = {
 }
 
 
-def section_title(section_key: str) -> str:
-    """分区展示标题（跟随当前语言）。"""
-    if LANG == "en":
+def section_title(section_key: str, lang: str = None) -> str:
+    """分区展示标题（默认跟随当前语言；导出可显式指定语言）。"""
+    if (lang or LANG) == "en":
         return SECTION_TITLES_EN.get(section_key, section_key)
     return {
         SECTION_CAPTION: "图像信息",
@@ -632,9 +732,9 @@ def section_title(section_key: str) -> str:
     }.get(section_key, section_key)
 
 
-def field_label(section_key: str, field_key: str) -> str:
-    """字段展示标签（跟随当前语言）。"""
-    if LANG == "en":
+def field_label(section_key: str, field_key: str, lang: str = None) -> str:
+    """字段展示标签（默认跟随当前语言；导出可显式指定语言）。"""
+    if (lang or LANG) == "en":
         return FIELD_LABELS_EN.get((section_key, field_key), field_key)
     return field_key
 
@@ -1324,8 +1424,8 @@ _LEXICON_SORTED = sorted(LEXICON_EN, key=lambda p: len(p[0]), reverse=True)
 _ENUM_PATTERN = re.compile("|".join(re.escape(k) for k in sorted(ENUM_VALUES_EN, key=len, reverse=True)))
 
 
-def tr_value(value: str) -> str:
-    """将中文字段值翻译为当前语言的展示值。
+def tr_value(value: str, lang: str = None) -> str:
+    """将中文字段值翻译为展示值（默认当前语言；导出可显式指定语言）。
 
     英文模式下：
       1. 先查枚举精确映射（类别值：是/否/高/中/低/损伤类型等）
@@ -1334,7 +1434,7 @@ def tr_value(value: str) -> str:
     """
     if not value or value == "—":
         return value
-    if LANG != "en":
+    if (lang or LANG) != "en":
         return value
     if value in ENUM_VALUES_EN:
         return ENUM_VALUES_EN[value]

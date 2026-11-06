@@ -37,6 +37,7 @@ from history import (init_db, save_record, query_records, get_record, clear_all,
                      clear_user_records, get_stats, can_access, update_note,
                      delete_record)
 from auth import user_for_request
+import export_tasks as xt
 from exporter import save_export
 from charts import charts_html
 from i18n import t as tr, tr_value
@@ -608,6 +609,139 @@ def do_clear_history(typed, request: gr.Request = None):
 
 
 # ══════════════════════════════════════════════════════════
+#  Tab 3: 报告导出（四格式 + 内容预设 + 任务中心，§11）
+# ══════════════════════════════════════════════════════════
+
+_TASK_BADGES = {
+    "pending": ("muted", "task_status_pending"),
+    "running": ("muted", "task_status_running"),
+    "done": ("success", "task_status_done"),
+    "failed": ("danger", "task_status_failed"),
+    "expired": ("warn", "task_status_expired"),
+}
+
+
+def _tasks_list_html(tasks):
+    """导出任务表：文件 · 格式 · 创建时间 · 状态 · 过期时间。"""
+    if not tasks:
+        return uc.empty_state(tr("tasks_none"), "")
+    rows = []
+    for t in tasks:
+        tone, status_key = _TASK_BADGES.get(t["status"], ("muted", t["status"]))
+        status = f'<span class="wd-badge wd-badge-{tone}">{tr(status_key)}</span>'
+        if t["status"] == "failed" and t["error"]:
+            status += f'<div style="font-size:12px;color:#C0392B;">{uc.esc(t["error"])}</div>'
+        expires = (tr("task_expires_note", date=(t["expires_at"] or "")[:16])
+                   if t["expires_at"] else "—")
+        fname = os.path.basename(t["file_path"] or f"task-{t['id']}")
+        rows.append(
+            "<tr>"
+            f"<td>{uc.esc(fname)}</td>"
+            f'<td>{t["fmt"].upper()}</td>'
+            f"<td class='wd-num'>{uc.esc(t['created_at'] or '—')}</td>"
+            f"<td>{status}</td>"
+            f"<td class='wd-num'>{uc.esc(expires)}</td>"
+            "</tr>")
+    header = [tr("tasks_col_file"), tr("tasks_col_fmt"), tr("tasks_col_created"),
+              tr("tasks_col_status"), tr("tasks_col_expires")]
+    return uc.data_table(header, "".join(rows))
+
+
+def _task_dd_update(tasks):
+    choices = []
+    for t in tasks:
+        label = (f'#{t["id"]} | {os.path.basename(t["file_path"] or "")} | '
+                 f'{tr(_TASK_BADGES.get(t["status"], ("", t["status"]))[1])}')
+        choices.append((label, str(t["id"])))
+    return gr.update(choices=choices, value=None)
+
+
+def _resolve_request_scope(request=None):
+    user_id, is_admin = _current_scope(request)
+    return user_id, is_admin
+
+
+def _lang_code(sel: str):
+    """报告语言选择 → i18n 语言码；auto=跟随界面。"""
+    return None if sel == "auto" else sel
+
+
+def start_export_task(fmt, preset, lang_sel, record_id_str, request: gr.Request = None):
+    """开始导出：校验记录权限 → 建任务 → 同步执行 → 刷新任务列表。"""
+    user_id, is_admin = _resolve_request_scope(request)
+    if user_id is None and not is_admin:
+        return tr("auth_need_login"), "", gr.update(), ""
+    if not record_id_str or not str(record_id_str).strip().isdigit():
+        return tr("export_msg_need_record"), "", gr.update(), ""
+
+    rid = int(str(record_id_str).strip())
+    record = get_record(rid)
+    if not record or not can_access(record, user_id, is_admin):
+        return tr("export_msg_no_access"), "", gr.update(), ""
+
+    fmt = (fmt or "pdf").split(" ")[0].lower()
+    if fmt not in xt.FORMATS:
+        fmt = "pdf"
+    preset = preset or "standard"
+    tid = xt.create_task(user_id, rid, fmt, preset)
+    task = xt.run_task(tid, user_id, is_admin)
+    if task["status"] == "failed":
+        err = task["error"] or ""
+        msg = tr("export_msg_failed", error=tr(err) if err in i18n.UI[i18n.LANG] else err)
+    else:
+        msg = tr("export_msg_done")
+    tasks = xt.list_tasks(None if is_admin else user_id)
+    return msg, _tasks_list_html(tasks), _task_dd_update(tasks), ""
+
+
+def refresh_tasks(request: gr.Request = None):
+    """刷新导出任务列表。"""
+    user_id, is_admin = _resolve_request_scope(request)
+    tasks = xt.list_tasks(None if is_admin else user_id)
+    return _tasks_list_html(tasks), _task_dd_update(tasks), ""
+
+
+def download_task(task_id_str, request: gr.Request = None):
+    """下载任务文件（过期/丢失文件给明确提示，不给死链）。"""
+    user_id, is_admin = _resolve_request_scope(request)
+    if not task_id_str or not str(task_id_str).strip().isdigit():
+        return None, tr("msg_task_need_select")
+    task = xt.get_task(int(str(task_id_str).strip()))
+    if not task or (not is_admin and task["user_id"] != user_id):
+        return None, tr("msg_task_forbidden")
+    if task["status"] == "expired" or not task["file_path"] \
+            or not os.path.exists(task["file_path"]):
+        return None, tr("task_status_expired") + "：" + tr("btn_task_retry")
+    return task["file_path"], tr("msg_task_download_done")
+
+
+def retry_export_task(task_id_str, request: gr.Request = None):
+    """重新生成失败/过期任务。"""
+    user_id, is_admin = _resolve_request_scope(request)
+    if not task_id_str or not str(task_id_str).strip().isdigit():
+        return tr("msg_task_need_select"), "", gr.update()
+    tid = int(str(task_id_str).strip())
+    task = xt.get_task(tid)
+    if not task or (not is_admin and task["user_id"] != user_id):
+        return tr("msg_task_forbidden"), "", gr.update()
+    xt.retry_task(tid, user_id, is_admin)
+    tasks = xt.list_tasks(None if is_admin else user_id)
+    return tr("users_msg_done"), _tasks_list_html(tasks), _task_dd_update(tasks)
+
+
+def delete_export_task(task_id_str, request: gr.Request = None):
+    """删除任务记录（user 仅限本人任务）。"""
+    user_id, is_admin = _resolve_request_scope(request)
+    if not task_id_str or not str(task_id_str).strip().isdigit():
+        return tr("msg_task_need_select"), "", gr.update()
+    tid = int(str(task_id_str).strip())
+    if not xt.delete_task(tid, user_id, is_admin):
+        return tr("msg_task_forbidden"), "", gr.update()
+    tasks = xt.list_tasks(None if is_admin else user_id)
+    return tr("msg_task_deleted"), _tasks_list_html(tasks), _task_dd_update(tasks)
+
+
+# ══════════════════════════════════════════════════════════
 #  Gradio 界面
 # ══════════════════════════════════════════════════════════
 
@@ -788,6 +922,50 @@ def build_ui():
                     note_tb = gr.Textbox(label=tr("note_label"), lines=2, scale=3)
                     btn_save_note = gr.Button(tr("btn_save_note"), scale=1)
 
+                # ─── 报告导出（§11：分裂选择 + 内容预设 + 任务中心）───
+                with gr.Accordion(tr("export_section"), open=False):
+                    with gr.Row(equal_height=True):
+                        export_fmt_dd = gr.Dropdown(
+                            label=tr("export_fmt_label"), scale=2,
+                            choices=[
+                                (tr("fmt_pdf"), "pdf"),
+                                (tr("fmt_docx"), "docx"),
+                                (tr("fmt_xlsx"), "xlsx"),
+                                (tr("fmt_csv"), "csv"),
+                            ], value="pdf")
+                        export_preset_dd = gr.Dropdown(
+                            label=tr("export_preset_label"), scale=2,
+                            choices=[
+                                (tr("preset_standard_short"), "standard"),
+                                (tr("preset_brief_short"), "brief"),
+                                (tr("preset_full_short"), "full"),
+                            ], value="standard")
+                        export_lang_dd = gr.Dropdown(
+                            label=tr("export_lang_label"), scale=1,
+                            choices=[
+                                (tr("export_lang_auto"), "auto"),
+                                (tr("export_lang_zh"), "zh"),
+                                (tr("export_lang_en"), "en"),
+                            ], value="auto")
+                        btn_export_report = gr.Button(
+                            tr("btn_start_export"), variant="primary", scale=1)
+                    export_status = gr.HTML(value="")
+
+                    gr.Markdown(f"**{tr('export_center_title')}**")
+                    tasks_list = gr.HTML(value=tr("tasks_none"))
+                    with gr.Row(equal_height=True):
+                        task_dd = gr.Dropdown(
+                            label=tr("task_select_label"), choices=[],
+                            interactive=True, scale=3)
+                        btn_task_refresh = gr.Button(tr("btn_task_refresh"), scale=1)
+                    with gr.Row(equal_height=True):
+                        task_download_file = gr.File(
+                            label=tr("btn_task_download"), interactive=False, scale=2)
+                        btn_task_download = gr.Button(tr("btn_task_download"), scale=1)
+                        btn_task_retry = gr.Button(tr("btn_task_retry"), scale=1)
+                        btn_task_delete = gr.Button(
+                            tr("btn_task_delete"), elem_classes=["wd-btn-danger"], scale=1)
+
                 # 清空（分级删除最高档：输入确认文字）
                 with gr.Accordion(tr("btn_clear_history"), open=False):
                     gr.Markdown(tr("clear_warning"))
@@ -914,6 +1092,33 @@ def build_ui():
             inputs=[clear_typed_tb],
             outputs=[history_stats, history_list, page_info_html,
                      history_record_dd, clear_typed_tb, filter_status],
+        )
+
+        # ─── 报告导出（§11）───
+        btn_export_report.click(
+            fn=start_export_task,
+            inputs=[export_fmt_dd, export_preset_dd, export_lang_dd, history_record_dd],
+            outputs=[export_status, tasks_list, task_dd, filter_status],
+        )
+        btn_task_refresh.click(
+            fn=refresh_tasks,
+            inputs=[],
+            outputs=[tasks_list, task_dd, filter_status],
+        )
+        btn_task_download.click(
+            fn=download_task,
+            inputs=[task_dd],
+            outputs=[task_download_file, export_status],
+        )
+        btn_task_retry.click(
+            fn=retry_export_task,
+            inputs=[task_dd],
+            outputs=[export_status, tasks_list, task_dd],
+        )
+        btn_task_delete.click(
+            fn=delete_export_task,
+            inputs=[task_dd],
+            outputs=[export_status, tasks_list, task_dd],
         )
 
     # 页脚 — 放在 Tabs 外层，全宽居中
