@@ -166,6 +166,8 @@ body::before {
 .wd-badge-warn    { background:var(--warn-bg);    color:var(--warn-deep); }
 .wd-badge-success { background:var(--success-bg); color:var(--success-deep); }
 .wd-badge-muted   { background:var(--table-head); color:var(--text-2); }
+/* 表格单元格内：徽章与同行纯文字垂直居中对齐（胶囊略收窄，避免视觉下坠） */
+table.wd-table td .wd-badge { vertical-align: middle; line-height: 18px; padding: 1px 10px; }
 
 /* ── 折叠板块（详细报告分组） ──────────────────────── */
 details.wd-sec {

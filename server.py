@@ -657,7 +657,9 @@ def create_app():
         head="<style>" + uc.BASE_CSS + "</style>",
         js=getattr(demo, "_wd_badge_js", None),
         show_error=True,
-        footer_links=[],  # 隐藏 Gradio 自带页脚（Use via API / Built with Gradio / 设置等）
+        # 页脚链接：保留"设置"入口（2026-11 用户反馈需要）；
+        # api/gradio/runs 仍隐藏，只显示设置页脚。传 None 会显示全部四项。
+        footer_links=["settings"],
     )
     return fastapp
 
