@@ -345,12 +345,12 @@ def create_app():
 
     async def _finish(request: Request, call_next):
         """统一补缓存头：HTML 页面禁缓存（防止浏览器拿旧样式渲染新页面导致白屏），
-        /assets 静态图片允许 1 小时缓存。"""
+        /wd-assets 背景图允许 1 小时缓存。"""
         response = await call_next(request)
         ctype = response.headers.get("content-type", "")
         if ctype.startswith("text/html"):
             response.headers["Cache-Control"] = "no-store"
-        elif request.url.path.startswith("/assets/"):
+        elif request.url.path.startswith("/wd-assets/"):
             response.headers.setdefault("Cache-Control", "public, max-age=3600")
         return response
 
@@ -375,7 +375,7 @@ def create_app():
 
         # 未初始化（无用户）：仅放行 /setup 与静态资源，其余全部导向 /setup
         if auth.count_users() == 0:
-            if path == "/setup" or path.startswith("/assets/") or \
+            if path == "/setup" or path.startswith("/wd-assets/") or \
                     path.startswith("/gradio_api/theme.css") or path == "/favicon.ico":
                 return await _finish(request, call_next)
             if path.startswith("/gradio_api/"):
@@ -623,12 +623,15 @@ def create_app():
         return FileResponse(path)
 
     # ─── Gradio 主应用挂载 ──────────────────────────────────
-    # 静态资源：页面背景场景图（BASE_CSS 引用 /assets/bg_scene.svg）。
-    # 必须在 Gradio 挂载到 "/" 之前注册，否则会被 "/" 通配路由吞掉。
+    # 静态资源：页面背景照片（BASE_CSS 引用 /wd-assets/bg_photo.jpg）。
+    # 注意：路径必须是 /wd-assets 而不是 /assets —— Gradio 自身的前端
+    # 样式/脚本就发布在 /assets 下（如 index-*.css），若占用同名路径会把
+    # Gradio 静态资源全部 404，导致主页面白屏。
+    # 仍须在 Gradio 挂载到 "/" 之前注册，否则会被 "/" 通配路由吞掉。
     from fastapi.staticfiles import StaticFiles
     assets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
     if os.path.isdir(assets_dir):
-        fastapp.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+        fastapp.mount("/wd-assets", StaticFiles(directory=assets_dir), name="wd-assets")
 
     demo = app_module.build_ui()
     gr.mount_gradio_app(

@@ -42,7 +42,7 @@ BASE_CSS = """
 
 /* ── 页面基调（真实风机照片背景 + 宋体/Times New Roman 字体）── */
 :root {
-  --bg-photo: url("/assets/bg_photo.jpg");
+  --bg-photo: url("/wd-assets/bg_photo.jpg");
   --font-stack: "Times New Roman", "SimSun", "宋体", "NSimSun", serif;
 }
 html {
