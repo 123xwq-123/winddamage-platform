@@ -255,6 +255,20 @@ def _batch_progress_html(banner_html: str, log_lines) -> str:
             f'<div class="wd-progress-box"><pre class="wd-progress-log">{log}</pre></div>')
 
 
+# 最近一次批量检测的可导出数据（进程内缓存；批量完成时由 analyze_batch 写入）
+_LAST_BATCH = {"rows": [], "header": [], "summary": ""}
+
+
+def export_batch_summary(fmt: str = "csv"):
+    """批量汇总导出按钮回调：返回 (文件, 状态文本)。"""
+    if not _LAST_BATCH["rows"]:
+        return None, tr("batch_export_none")
+    from exporter import save_batch_export
+    path = save_batch_export(_LAST_BATCH["rows"], _LAST_BATCH["header"],
+                             _LAST_BATCH["summary"], fmt=fmt)
+    return path, tr("msg_infer_done", t=0) if False else f"✅ {os.path.basename(path)}"
+
+
 def analyze_batch(files, request: gr.Request = None):
     """批量分析多张图片。生成器逐张产出 (summary, table_html, progress_html)，实时刷新进度。"""
     if not files:
@@ -265,6 +279,7 @@ def analyze_batch(files, request: gr.Request = None):
 
     results = []
     high_flags = []  # 与 results 行一一对应，用于整行风险着色
+    export_rows = []  # 纯文本行（无 HTML 标签），供批量汇总导出
     status_parts = []
     total = len(files)
     ok_count = 0
@@ -308,6 +323,8 @@ def analyze_batch(files, request: gr.Request = None):
                 fail_count += 1
                 results.append([uc.esc(image_name), "❌", "—", "—", "—", "—", f"{infer_time:.1f}s"])
                 high_flags.append(False)
+                export_rows.append([image_name, tr("msg_parse_fail"),
+                                    "—", "—", "—", "—", f"{infer_time:.1f}s"])
                 status_parts.append(f'[{i+1}/{total}] {image_name}: ❌ {tr("msg_parse_fail")}')
                 yield tr("batch_partial", ok=ok_count, total=total, failed=fail_count), \
                       render_table(), _batch_progress_html(banner, status_parts)
@@ -331,6 +348,13 @@ def analyze_batch(files, request: gr.Request = None):
                 f"{infer_time:.1f}s",
             ])
             high_flags.append(high)
+            export_rows.append([
+                image_name,
+                tr("badge_high_risk") if high else tr("badge_normal"),
+                has_damage or "—", damage_type or "—",
+                component or "—", priority or "—",
+                f"{infer_time:.1f}s",
+            ])
 
             # 保存历史（归属当前登录用户）
             save_record(image_name, parsed, infer_time, image_path,
@@ -343,6 +367,8 @@ def analyze_batch(files, request: gr.Request = None):
             fail_count += 1
             results.append([uc.esc(image_name), "❌", "—", "—", "—", "—", uc.esc(str(e)[:50])])
             high_flags.append(False)
+            export_rows.append([image_name, f"{tr('msg_infer_fail')}: {str(e)[:40]}",
+                                "—", "—", "—", "—", "—"])
             status_parts.append(f"[{i+1}/{total}] {image_name}: ❌ {e}")
 
         done_summary = tr("batch_partial", ok=ok_count, total=total, failed=fail_count) if fail_count \
@@ -352,6 +378,11 @@ def analyze_batch(files, request: gr.Request = None):
     final_summary = tr("batch_partial", ok=ok_count, total=total, failed=fail_count) if fail_count \
         else tr("batch_done", ok=ok_count, total=total)
     final_banner = uc.status_banner(final_summary, "warn" if fail_count else "success")
+    # 记录最终导出数据（生成器结束时写入模块级"最近一次批量结果"，
+    # 导出按钮点击时读取 —— gradio 事件间传递用）
+    _LAST_BATCH["rows"] = export_rows
+    _LAST_BATCH["header"] = header
+    _LAST_BATCH["summary"] = final_summary
     yield final_summary, render_table(), _batch_progress_html(final_banner, status_parts)
 
 
@@ -875,19 +906,12 @@ _BADGE_JS = """
       + '<a href="/change-password">__PW_LINK__</a>'
       + '<a href="/logout">__LOGOUT_LINK__</a>'
       + '<a href="javascript:void(0)" id="wd-settings-link">__SETTINGS_LINK__</a>';
-    // "设置"：Gradio 设置面板的开关是页脚按钮的私有组件状态，
-    // 唯一入口是页脚 Settings 按钮（footer[aria-label] 内 alt 含 settings 的按钮）。
-    // 页脚本体已用 CSS 隐藏，这里程序化点击它即可打开面板。
+    // "设置"：打开自定义中文显示设置弹层（深浅模式/字号缩放，localStorage 持久化）。
+    // 不再使用 Gradio 英文设置面板（其开关是页脚按钮的私有组件状态，无公开路由）。
     const sl = document.getElementById('wd-settings-link');
-    if (sl) sl.addEventListener('click', () => {
-      const btn = document.querySelector(
-        'footer[aria-label] button:has(img[alt*="etting" i]),'
-        + ' footer[aria-label] button:has(img[alt*="设置"])');
-      if (btn) { btn.click(); return; }
-      // 兜底：任何 alt 含 设置/Settings 的页脚图片的最近按钮祖先
-      const img = Array.from(document.querySelectorAll('footer[aria-label] img'))
-        .find(im => /setting|设置/i.test(im.getAttribute('alt') || ''));
-      if (img) { (img.closest('button') || img.parentElement || img).click(); }
+    if (sl) sl.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      if (window.__wdToggleSettings) window.__wdToggleSettings();
     });
     return true;
   };
@@ -904,6 +928,142 @@ _BADGE_JS = """
 """
 
 
+# 显示设置弹层（右上角"设置"打开）：深浅模式 + 字号缩放。
+# 不用 Gradio 自带英文设置面板——其开关是页脚按钮的私有 Svelte store 状态，
+# 无公开路由、无法从自定义代码稳定编程打开。此弹层纯前端生效：
+#   - 深浅模式：Gradio 主题由启动时 ?__theme=dark 一次性决定，运行时改 class
+#     不可靠 → 用带参跳转切换，选择存 localStorage('wd_theme')，进入时自动带上；
+#   - 字号缩放：调 :root 上的 --wd-fs（BASE_CSS 的 --text-* 均为 calc(px*var(--wd-fs))），
+#     存 localStorage('wd_font_scale')，无需刷新即时生效。
+def _settings_popover_html() -> str:
+    return (
+        '<div id="wd-settings-mask" class="wd-settings-mask"></div>\n'
+        '<div id="wd-settings-popover" class="wd-settings-popover" '
+        f'role="dialog" aria-label="{uc.esc(tr("settings_title"))}">\n'
+        '  <div class="wd-sp-head">\n'
+        f'    <span class="wd-sp-title">{uc.esc(tr("settings_title"))}</span>\n'
+        f'    <button type="button" id="wd-sp-close">{uc.esc(tr("settings_close"))}</button>\n'
+        '  </div>\n'
+        '  <div class="wd-sp-row">\n'
+        f'    <span class="wd-sp-label">{uc.esc(tr("settings_theme"))}</span>\n'
+        '    <div class="wd-sp-seg" id="wd-sp-theme">\n'
+        f'      <button type="button" data-wd-theme="light">{uc.esc(tr("settings_theme_light"))}</button>\n'
+        f'      <button type="button" data-wd-theme="dark">{uc.esc(tr("settings_theme_dark"))}</button>\n'
+        '    </div>\n'
+        '  </div>\n'
+        '  <div class="wd-sp-row">\n'
+        f'    <label class="wd-sp-label" for="wd-sp-font">{uc.esc(tr("settings_font"))}</label>\n'
+        '    <div class="wd-sp-font">\n'
+        '      <input type="range" id="wd-sp-font" min="85" max="135" step="5" value="100"/>\n'
+        '      <span id="wd-sp-font-val">100%</span>\n'
+        f'      <button type="button" id="wd-sp-font-reset">{uc.esc(tr("settings_reset"))}</button>\n'
+        '    </div>\n'
+        '  </div>\n'
+        '</div>'
+    )
+
+
+# 弹层逻辑（与徽章脚本同批注入 head，IIFE 组合见 build_ui 尾部）：
+#   - 启动时先应用持久化偏好（字号即时、深浅模式按需带参跳转）；
+#   - 弹层元素由 gr.HTML 渲染，时机不确定 → 绑定带重试（同徽章做法）。
+_SETTINGS_POPOVER_JS = """
+() => {
+  var store = null;
+  try { store = window.localStorage; } catch (e) { store = null; }
+  function get(k) { try { return store ? store.getItem(k) : null; } catch (e) { return null; } }
+  function set(k, v) {
+    try {
+      if (!store) return;
+      if (v === null) store.removeItem(k); else store.setItem(k, v);
+    } catch (e) {}
+  }
+
+  // ── 字号缩放：设 --wd-fs 即时生效 ──
+  function applyFont(v) {
+    document.documentElement.style.setProperty('--wd-fs', String(v));
+  }
+  var fs = parseFloat(get('wd_font_scale'));
+  if (!isFinite(fs) || fs < 0.85 || fs > 1.35) fs = 1;
+  applyFont(fs);
+
+  // ── 深浅模式：Gradio 主题由 ?__theme= 启动时决定 → 不一致就带参跳转一次 ──
+  var hasDark = new URLSearchParams(location.search).get('__theme') === 'dark';
+  var savedTheme = get('wd_theme');
+  if ((savedTheme === 'dark') !== hasDark) {
+    var u0 = new URL(location.href);
+    if (savedTheme === 'dark') u0.searchParams.set('__theme', 'dark');
+    else u0.searchParams.delete('__theme');
+    location.replace(u0.toString());
+    return; // 跳转中，后续初始化在新页面继续
+  }
+  var curDark = hasDark;
+
+  // ── 弹层开合与控件绑定（元素渲染完成前重试） ──
+  var tries = 0;
+  function refreshThemeBtns() {
+    var box = document.getElementById('wd-sp-theme');
+    if (!box) return;
+    Array.prototype.forEach.call(box.querySelectorAll('button'), function (b) {
+      var isCur = (b.getAttribute('data-wd-theme') === 'dark') === curDark;
+      b.classList.toggle('wd-active', isCur);
+    });
+  }
+  function gotoTheme(dark) {
+    if (dark === curDark) return;
+    set('wd_theme', dark ? 'dark' : null);
+    var u = new URL(location.href);
+    if (dark) u.searchParams.set('__theme', 'dark');
+    else u.searchParams.delete('__theme');
+    location.replace(u.toString());
+  }
+  function bind() {
+    var pop = document.getElementById('wd-settings-popover');
+    var mask = document.getElementById('wd-settings-mask');
+    if (!pop || !mask) return false;
+    window.__wdToggleSettings = function () {
+      var open = pop.classList.toggle('wd-open');
+      mask.classList.toggle('wd-open', open);
+      if (open) refreshThemeBtns();
+    };
+    mask.addEventListener('click', function () { window.__wdToggleSettings(); });
+    var closeBtn = document.getElementById('wd-sp-close');
+    if (closeBtn) closeBtn.addEventListener('click', function () { window.__wdToggleSettings(); });
+    var themeBox = document.getElementById('wd-sp-theme');
+    if (themeBox) themeBox.addEventListener('click', function (ev) {
+      var b = ev.target.closest ? ev.target.closest('button[data-wd-theme]') : null;
+      if (b) gotoTheme(b.getAttribute('data-wd-theme') === 'dark');
+    });
+    var range = document.getElementById('wd-sp-font');
+    var val = document.getElementById('wd-sp-font-val');
+    if (range) {
+      range.value = String(Math.round(fs * 100));
+      if (val) val.textContent = Math.round(fs * 100) + '%';
+      range.addEventListener('input', function () {
+        var v = parseInt(range.value, 10) / 100;
+        fs = v; applyFont(v);
+        if (val) val.textContent = range.value + '%';
+        set('wd_font_scale', v === 1 ? null : String(v));
+      });
+    }
+    var reset = document.getElementById('wd-sp-font-reset');
+    if (reset) reset.addEventListener('click', function () {
+      fs = 1; applyFont(1); set('wd_font_scale', null);
+      if (range) range.value = '100';
+      if (val) val.textContent = '100%';
+    });
+    return true;
+  }
+  if (!bind()) {
+    var t = setInterval(function () {
+      tries += 1;
+      if (bind() || tries > 100) clearInterval(t);
+    }, 100);
+  }
+  refreshThemeBtns();
+}
+"""
+
+
 def build_ui():
     badge_js = (_BADGE_JS
                 .replace("__ROLE_ADMIN__", tr("users_role_admin"))
@@ -915,6 +1075,8 @@ def build_ui():
     with gr.Blocks(title=tr("app_title")) as app:
         # 顶栏用户徽章（内容由上面的 JS 注入）
         gr.HTML('<div id="wd-user-badge" class="wd-user-badge"></div>')
+        # 显示设置弹层（右上角"设置"打开；深浅模式 + 字号缩放，localStorage 持久化）
+        gr.HTML(_settings_popover_html())
         # 标题（含 SVG 风电机组图标）
         gr.Markdown(
             "<div class='main-title'>"
@@ -993,6 +1155,10 @@ def build_ui():
                     with gr.Column(scale=2):
                         batch_summary = gr.Markdown(tr("batch_waiting"))
                         batch_html = gr.HTML(value=EMPTY_RESULT_HTML)
+                        with gr.Row():
+                            btn_batch_export_csv = gr.Button(tr("btn_batch_export_csv"))
+                            btn_batch_export_md = gr.Button(tr("btn_batch_export_md"))
+                        batch_export_file = gr.File(label=tr("batch_file_label"), interactive=False)
 
             # ─── Tab 3: 历史记录 ────────────────────────────
             with gr.TabItem(tr("tab_history")):
@@ -1164,6 +1330,14 @@ def build_ui():
             inputs=[batch_input],
             outputs=[batch_summary, batch_html, batch_status],
         )
+        btn_batch_export_csv.click(
+            fn=lambda: export_batch_summary("csv"),
+            inputs=[], outputs=[batch_export_file, batch_status],
+        )
+        btn_batch_export_md.click(
+            fn=lambda: export_batch_summary("md"),
+            inputs=[], outputs=[batch_export_file, batch_status],
+        )
 
         # Tab 3 — 查询（任何筛选变化 → 回第一页）
         QUERY_INPUTS = [search_tb, risk_dd, date_from_tb, date_to_tb,
@@ -1305,7 +1479,9 @@ def build_ui():
     #   都因此从未执行过 → 顶栏用户徽章（用户管理/修改密码/退出登录）一直为空。
     #   修复：包一层 IIFE 立即自调用。
     drawer_js = _DRAWER_JS
-    app._wd_badge_js = f"(() => {{ ({badge_js})(); ({drawer_js})(); }})();"
+    settings_js = _SETTINGS_POPOVER_JS
+    app._wd_badge_js = (f"(() => {{ ({badge_js})(); ({drawer_js})(); "
+                        f"({settings_js})(); }})();")
     return app
 
 

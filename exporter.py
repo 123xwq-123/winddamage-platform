@@ -91,3 +91,64 @@ def save_export(report: dict, image_name: str, infer_time: float,
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(content)
     return filepath
+
+
+# ══════════════════════════════════════════════════════════
+#  批量汇总导出（CSV / Markdown 汇总表）
+# ══════════════════════════════════════════════════════════
+
+def export_batch_csv(rows: list, header: list) -> str:
+    """批量结果汇总 CSV 字符串。rows 为已渲染纯文本的行（无 HTML 标签）。"""
+    import csv
+    import io
+    buf = io.StringIO()
+    # utf-8-sig：让 Excel 直接打开不乱码
+    writer = csv.writer(buf, lineterminator="\r\n")
+    writer.writerow(header)
+    writer.writerows(rows)
+    return buf.getvalue()
+
+
+def export_batch_markdown(rows: list, header: list,
+                          summary: str = "") -> str:
+    """批量结果汇总 Markdown 字符串（跟随当前语言）。"""
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines = [
+        f"# {tr('batch_export_title')}",
+        "",
+        f"- {tr('export_time')}: {ts}",
+    ]
+    if summary:
+        lines.append(f"- {tr('batch_export_summary')}: {summary}")
+    lines += [
+        "",
+        f"| {' | '.join(header)} |",
+        "|" + "|".join(["----"] * len(header)) + "|",
+    ]
+    for row in rows:
+        cells = [str(c).replace("|", "\\|") for c in row]
+        lines.append(f"| {' | '.join(cells)} |")
+    return "\n".join(lines)
+
+
+def save_batch_export(rows: list, header: list, summary: str = "",
+                      fmt: str = "csv", output_dir: str = None) -> str:
+    """批量汇总导出到文件，返回文件路径。fmt: "csv" 或 "md"。"""
+    if output_dir is None:
+        output_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "exports"
+        )
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    if fmt == "md":
+        content = export_batch_markdown(rows, header, summary)
+        filename = f"batch_{timestamp}.md"
+    else:
+        content = export_batch_csv(rows, header)
+        filename = f"batch_{timestamp}.csv"
+
+    filepath = os.path.join(output_dir, filename)
+    with open(filepath, "w", encoding="utf-8-sig", newline="") as f:
+        f.write(content)
+    return filepath

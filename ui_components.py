@@ -91,13 +91,16 @@ body::before {
 
 /* ── 显示比例还原：css= 注入路径失效期间主页面回落到了 Gradio 默认
    小字号（12/14px）。这里按主题变量整体上调约 1px，恢复原有观感，
-   下拉/表格等组件字号随主题变量联动。 ── */
+   下拉/表格等组件字号随主题变量联动。
+   显示设置弹层的"字号缩放"调 :root 的 --wd-fs（默认 1），此处全部
+   px 值乘以该系数，缩放即时生效且与组件字号联动。 ── */
 .gradio-container {
-  --text-sm: 13px !important; --block-info-text-size: 13px !important;
-  --block-label-text-size: 13px !important; --block-title-text-size: 14px !important;
-  --body-text-size: 15px !important; --text-md: 15px !important;
-  --text-lg: 17px !important; --text-xl: 23px !important;
-  --text-xxl: 26px !important;
+  --wd-fs: 1;
+  --text-sm: calc(13px * var(--wd-fs)) !important; --block-info-text-size: calc(13px * var(--wd-fs)) !important;
+  --block-label-text-size: calc(13px * var(--wd-fs)) !important; --block-title-text-size: calc(14px * var(--wd-fs)) !important;
+  --body-text-size: calc(15px * var(--wd-fs)) !important; --text-md: calc(15px * var(--wd-fs)) !important;
+  --text-lg: calc(17px * var(--wd-fs)) !important; --text-xl: calc(23px * var(--wd-fs)) !important;
+  --text-xxl: calc(26px * var(--wd-fs)) !important;
 }
 .gradio-container.gradio-container-6-26-0 { font-size: var(--text-md) !important; }
 
@@ -356,6 +359,42 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
   text-align:center; border:1px solid var(--border); border-radius:6px;
   padding:8px 12px; color:var(--brand-700); text-decoration:none;
   background:var(--bg-card); display:inline-block; }
+
+/* ── 显示设置弹层（右上角"设置"打开；深浅模式 + 字号缩放）── */
+.wd-settings-mask { position:fixed; inset:0; background:var(--overlay); z-index:9990;
+  opacity:0; pointer-events:none;
+  transition:opacity var(--duration-normal) var(--ease-standard); }
+.wd-settings-mask.wd-open { opacity:1; pointer-events:auto; }
+.wd-settings-popover { position:fixed; top:60px; right:16px; z-index:9991;
+  width:min(320px,92vw); background:var(--bg-card); border:1px solid var(--border);
+  border-radius:10px; box-shadow:var(--shadow-2); padding:14px 16px;
+  opacity:0; transform:translateY(-6px); pointer-events:none;
+  transition:opacity var(--duration-normal) var(--ease-standard),
+             transform var(--duration-normal) var(--ease-standard); }
+.wd-settings-popover.wd-open { opacity:1; transform:none; pointer-events:auto; }
+.wd-sp-head { display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:10px; }
+.wd-sp-title { font-size:15px; font-weight:600; color:var(--text-1); }
+.wd-sp-head button { font-size:12px; padding:4px 10px; cursor:pointer;
+  border:1px solid var(--border); border-radius:6px; background:var(--bg-page);
+  color:var(--text-2); }
+.wd-sp-head button:hover { background:var(--brand-100); color:var(--brand-700); }
+.wd-sp-row { margin-bottom:12px; }
+.wd-sp-row:last-child { margin-bottom:0; }
+.wd-sp-label { display:block; font-size:13px; color:var(--text-2); margin-bottom:6px; }
+.wd-sp-seg { display:flex; gap:8px; }
+.wd-sp-seg button { flex:1; font-size:13px; padding:7px 0; cursor:pointer;
+  border:1px solid var(--border); border-radius:6px; background:var(--bg-page);
+  color:var(--text-2); }
+.wd-sp-seg button.wd-active { background:var(--brand-500); border-color:var(--brand-500);
+  color:#fff; font-weight:600; }
+.wd-sp-font { display:flex; align-items:center; gap:10px; }
+.wd-sp-font input[type="range"] { flex:1; accent-color:var(--brand-500); }
+.wd-sp-font span { font-size:13px; color:var(--text-1); min-width:42px; text-align:right; }
+.wd-sp-font button { font-size:12px; padding:4px 10px; cursor:pointer;
+  border:1px solid var(--border); border-radius:6px; background:var(--bg-page);
+  color:var(--text-2); }
+.wd-sp-font button:hover { background:var(--brand-100); }
 
 /* ── 批量进度日志（可滚动，column-reverse 使新内容保持在视野底部）── */
 .wd-progress-box { max-height:230px; overflow-y:auto; display:flex;

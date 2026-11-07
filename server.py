@@ -294,7 +294,6 @@ def _users_page(me: dict, banner: str = ""):
       <span class="wd-ub-name">{uc.esc(me["username"])}</span>
       <a href="/change-password">{uc.esc(tr("pw_link"))}</a>
       <a href="/logout">{uc.esc(tr("btn_logout"))}</a>
-      <a href="/?view=settings">{uc.esc(tr("settings_link"))}</a>
     </span>
   </div>
   <h1 style="font-size:20px;margin:8px 0 12px;">{uc.esc(tr("users_title"))}</h1>
@@ -658,8 +657,8 @@ def create_app():
         head="<style>" + uc.BASE_CSS + "</style>",
         js=getattr(demo, "_wd_badge_js", None),
         show_error=True,
-        # 页脚保留 settings：设置面板开关是 Gradio 前端页脚按钮的私有状态，
-        # 无 ?view=settings 的公开路由；右上角"设置"链接靠程序化点击该按钮。
+        # 页脚保留 settings：仅作为 Gradio 面板自身的入口兜底；右上角"设置"
+        # 链接打开的是自定义中文显示设置弹层（见 app._SETTINGS_POPOVER_JS）。
         # 页脚视觉由 CSS 隐藏（见 ui_components BASE_CSS 尾部）。
         footer_links=["settings"],
     )

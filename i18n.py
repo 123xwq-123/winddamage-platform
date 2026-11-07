@@ -79,6 +79,12 @@ UI = {
         "batch_waiting": "### 批量检测结果\n上传多张图片后点击「开始批量分析」",
         "batch_done": "### 批量检测完成\n\n✅ {ok}/{total} 成功",
         "no_detail": "无详情",
+        "btn_batch_export_csv": "📊 导出 CSV 汇总",
+        "btn_batch_export_md": "📄 导出 Markdown 汇总",
+        "batch_file_label": "批量汇总文件",
+        "batch_export_title": "批量检测结果汇总",
+        "batch_export_summary": "结果统计",
+        "batch_export_none": "请先完成一次批量检测，再导出汇总",
 
         # Tab 3
         "btn_refresh": "🔄 刷新",
@@ -360,6 +366,13 @@ UI = {
         "pw_link": "修改密码",
         "users_self": "当前账号",
         "settings_link": "设置",
+        "settings_title": "显示设置",
+        "settings_close": "关闭",
+        "settings_theme": "深浅模式",
+        "settings_theme_light": "浅色",
+        "settings_theme_dark": "深色",
+        "settings_font": "字号缩放",
+        "settings_reset": "默认",
     },
     "en": {
         "app_title": "Wind Turbine Damage Assessment Platform Based on Multimodal LLM",
@@ -397,6 +410,12 @@ UI = {
         "batch_waiting": "### Batch Results\nUpload multiple images and click \"Run Batch Analysis\"",
         "batch_done": "### Batch Analysis Complete\n\n✅ {ok}/{total} succeeded",
         "no_detail": "No details",
+        "btn_batch_export_csv": "📊 Export CSV Summary",
+        "btn_batch_export_md": "📄 Export Markdown Summary",
+        "batch_file_label": "Batch summary file",
+        "batch_export_title": "Batch Detection Results Summary",
+        "batch_export_summary": "Statistics",
+        "batch_export_none": "Run a batch analysis first, then export the summary",
 
         "btn_refresh": "🔄 Refresh",
         "btn_clear_history": "🗑️ Clear History",
@@ -671,6 +690,13 @@ UI = {
         "pw_link": "Password",
         "users_self": "You",
         "settings_link": "Settings",
+        "settings_title": "Display Settings",
+        "settings_close": "Close",
+        "settings_theme": "Theme",
+        "settings_theme_light": "Light",
+        "settings_theme_dark": "Dark",
+        "settings_font": "Font Size",
+        "settings_reset": "Reset",
     },
 }
 
