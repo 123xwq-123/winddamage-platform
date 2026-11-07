@@ -45,6 +45,30 @@ def _setup_font():
 _setup_font()
 plt.rcParams["axes.unicode_minus"] = False
 
+# ─── 设计系统配色（与 ui_components.BASE_CSS 令牌一致，B5 图表样式统一）───
+_BRAND_900 = "#0D3A66"   # 标题
+_BRAND_500 = "#1E6BB8"   # 主线/主色
+_TEXT_2 = "#52606D"      # 刻度/轴标签
+_BORDER = "#E4E7EB"      # 网格/轴线
+# 饼图调色板：品牌蓝系 + 语义色，饱和度适中、白描边下区分度足够
+_PALETTE = ["#1E6BB8", "#5DADE2", "#7FB3D8", "#F39C12", "#E74C3C",
+            "#27AE60", "#AF7AC5", "#5D6D7E", "#B2BABB"]
+
+
+def _style_axes(ax):
+    """统一坐标轴风格：浅网格、去顶右框线、轴线与刻度用中性色。"""
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(_BORDER)
+    ax.tick_params(colors=_TEXT_2, labelsize=10)
+    ax.grid(axis="y", color=_BORDER, linewidth=0.8, alpha=0.8)
+    ax.set_axisbelow(True)
+
+
+def _style_title(ax, text):
+    ax.set_title(text, fontsize=13, pad=12, color=_BRAND_900)
+
 
 def _fig_to_base64(fig):
     """将 matplotlib 图像转为 base64 PNG。"""
@@ -96,20 +120,31 @@ def damage_type_chart(owner_user_id=None) -> str:
         labels.append(tr("chart_others"))
         sizes.append(others)
 
-    colors = ["#5DADE2", "#F5B041", "#58D68D", "#EC7063",
-              "#AF7AC5", "#5D6D7E", "#F7DC6F", "#48C9B0", "#B2BABB"]
+    colors = _PALETTE
     fig, ax = plt.subplots(figsize=(5.2, 3.8))
     result = ax.pie(
         sizes, labels=labels, colors=colors[:len(sizes)],
         autopct="%1.0f%%", startangle=90, pctdistance=0.78,
-        textprops={"fontsize": 9},
+        textprops={"fontsize": 9, "color": _TEXT_2},
     )
     # matplotlib 版本不同返回值个数不同：2 个（wedges, texts）或 3 个（+ autotexts）
     wedges = result[0]
     for w in wedges:
         w.set_edgecolor("white")
         w.set_linewidth(1.5)
-    ax.set_title(tr("chart_damage_title"), fontsize=13, pad=12)
+    # 百分比数字放扇区内部，白色加粗更清晰
+    # matplotlib 版本不同：新版返回 PieContainer（.autotexts），旧版返回 2/3 元组
+    autotexts = getattr(result, "autotexts", None)
+    if autotexts is None:
+        try:
+            autotexts = result[2]
+        except (IndexError, TypeError):
+            autotexts = None
+    for t in (autotexts or []):
+        t.set_color("white")
+        t.set_fontweight("bold")
+        t.set_fontsize(9)
+    _style_title(ax, tr("chart_damage_title"))
     return _fig_to_base64(fig)
 
 
@@ -134,11 +169,10 @@ def priority_chart(owner_user_id=None) -> str:
                   color=[colors[p] for p in order_zh], width=0.5)
     for bar, v in zip(bars, [counts[p] for p in order_zh]):
         ax.text(bar.get_x() + bar.get_width() / 2, v + 0.3,
-                str(v), ha="center", fontsize=11)
-    ax.set_ylabel(tr("chart_ylabel_count"), fontsize=11)
-    ax.set_title(tr("chart_priority_title"), fontsize=13, pad=12)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+                str(v), ha="center", fontsize=11, color=_BRAND_900)
+    ax.set_ylabel(tr("chart_ylabel_count"), fontsize=11, color=_TEXT_2)
+    _style_title(ax, tr("chart_priority_title"))
+    _style_axes(ax)
     ax.set_ylim(0, max(counts.values()) * 1.25 + 1)
     return _fig_to_base64(fig)
 
@@ -165,16 +199,17 @@ def trend_chart(owner_user_id=None) -> str:
     ys = [counter[x] for x in xs]
 
     fig, ax = plt.subplots(figsize=(5.2, 3.8))
-    ax.plot(range(len(xs)), ys, marker="o", color="#125191",
+    ax.plot(range(len(xs)), ys, marker="o", color=_BRAND_500,
             linewidth=2, markersize=5)
+    # 品牌蓝渐变面积（B5）：折线下方淡淡的填充，趋势感更清晰
+    ax.fill_between(range(len(xs)), ys, color=_BRAND_500, alpha=0.10, zorder=1)
     ax.set_xticks(range(len(xs)))
     ax.set_xticklabels([x[5:] for x in xs], fontsize=8, rotation=30)
-    ax.set_ylabel(tr("chart_ylabel_count"), fontsize=11)
-    ax.set_title(tr("chart_trend_title"), fontsize=13, pad=12)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    ax.set_ylabel(tr("chart_ylabel_count"), fontsize=11, color=_TEXT_2)
+    _style_title(ax, tr("chart_trend_title"))
+    _style_axes(ax)
     for i, v in enumerate(ys):
-        ax.text(i, v + 0.2, str(v), ha="center", fontsize=9)
+        ax.text(i, v + 0.2, str(v), ha="center", fontsize=9, color=_BRAND_900)
     return _fig_to_base64(fig)
 
 
