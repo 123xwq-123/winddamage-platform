@@ -294,6 +294,7 @@ def _users_page(me: dict, banner: str = ""):
       <span class="wd-ub-name">{uc.esc(me["username"])}</span>
       <a href="/change-password">{uc.esc(tr("pw_link"))}</a>
       <a href="/logout">{uc.esc(tr("btn_logout"))}</a>
+      <a href="/?view=settings">{uc.esc(tr("settings_link"))}</a>
     </span>
   </div>
   <h1 style="font-size:20px;margin:8px 0 12px;">{uc.esc(tr("users_title"))}</h1>
@@ -657,9 +658,9 @@ def create_app():
         head="<style>" + uc.BASE_CSS + "</style>",
         js=getattr(demo, "_wd_badge_js", None),
         show_error=True,
-        # 页脚链接：保留"设置"入口（2026-11 用户反馈需要）；
-        # api/gradio/runs 仍隐藏，只显示设置页脚。传 None 会显示全部四项。
-        footer_links=["settings"],
+        # "设置"入口已上移到页面右上角用户徽章栏（?view=settings），
+        # 页脚整体隐藏（2026-11 用户要求把设置放到退出登录后面）。
+        footer_links=[],
     )
     return fastapp
 

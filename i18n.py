@@ -359,6 +359,7 @@ UI = {
         "users_link": "用户管理",
         "pw_link": "修改密码",
         "users_self": "当前账号",
+        "settings_link": "设置",
     },
     "en": {
         "app_title": "Wind Turbine Damage Assessment Platform Based on Multimodal LLM",
@@ -669,6 +670,7 @@ UI = {
         "users_link": "Users",
         "pw_link": "Password",
         "users_self": "You",
+        "settings_link": "Settings",
     },
 }
 

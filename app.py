@@ -873,7 +873,15 @@ _BADGE_JS = """
       + '<span class="wd-badge wd-badge-muted">' + role + '</span>'
       + (u.role === 'admin' ? '<a href="/users">__USERS_LINK__</a>' : '')
       + '<a href="/change-password">__PW_LINK__</a>'
-      + '<a href="/logout">__LOGOUT_LINK__</a>';
+      + '<a href="/logout">__LOGOUT_LINK__</a>'
+      + '<a href="javascript:void(0)" id="wd-settings-link">__SETTINGS_LINK__</a>';
+    const sl = document.getElementById('wd-settings-link');
+    if (sl) sl.addEventListener('click', () => {
+      const t = new URLSearchParams(window.location.search);
+      t.set('view', 'settings');
+      history.replaceState(null, '', '?' + t.toString());
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
     return true;
   };
   fetch('/api/me').then(r => r.ok ? r.json() : null).then(u => {
@@ -895,7 +903,8 @@ def build_ui():
                 .replace("__ROLE_USER__", tr("users_role_user"))
                 .replace("__USERS_LINK__", tr("users_link"))
                 .replace("__PW_LINK__", tr("pw_link"))
-                .replace("__LOGOUT_LINK__", tr("btn_logout")))
+                .replace("__LOGOUT_LINK__", tr("btn_logout"))
+                .replace("__SETTINGS_LINK__", tr("settings_link")))
     with gr.Blocks(title=tr("app_title")) as app:
         # 顶栏用户徽章（内容由上面的 JS 注入）
         gr.HTML('<div id="wd-user-badge" class="wd-user-badge"></div>')
