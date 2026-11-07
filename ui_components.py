@@ -14,7 +14,14 @@ import i18n
 
 
 # ══════════════════════════════════════════════════════════
-#  设计令牌 + 全局样式（经 launch(css=...) 注入）
+#  设计令牌 + 全局样式
+#  注入方式说明（重要）：主页面（Gradio）通过 server.py 的 head 参数
+#  注入 <link rel="stylesheet" href="/wd-assets/base.css"> 加载本文件；
+#  独立页（FastAPI 直渲染）由 page_shell 直接内嵌 BASE_CSS。
+#  不能用 css= 参数：Gradio 会把 css= 里的每条规则都加
+#  ".gradio-container... .contain" 前缀（用于组件级作用域），
+#  html/body/:root 这类顶层规则被前缀化后在主页面上失效
+#  ——这正是"主页面背景/字体全不生效"的根因。
 # ══════════════════════════════════════════════════════════
 
 BASE_CSS = """
@@ -40,7 +47,9 @@ BASE_CSS = """
   --ease-standard:cubic-bezier(.2,0,0,1);
 }
 
-/* ── 页面基调（真实风机照片背景 + 宋体/Times New Roman 字体）── */
+/* ── 页面基调（真实风机照片背景 + 宋体/Times New Roman 字体）──
+   注意：html/body/:root 规则必须走 <link>（见文件头说明），
+   不能被 Gradio 的 css= 前缀化，否则主页面不生效。 */
 :root {
   --bg-photo: url("/wd-assets/bg_photo.jpg");
   --font-stack: "Times New Roman", "SimSun", "宋体", "NSimSun", serif;
@@ -48,9 +57,14 @@ BASE_CSS = """
 html {
   background: var(--bg-page) !important; /* 兜底纯色，图片未加载时也不影响可读 */
 }
-body {
-  background: transparent !important; /* 必须透明，否则会盖住 z-index:-1 的照片层 */
+/* Gradio 运行时会用内联样式给 html/body/gradio-app 涂 neutral 底色，且主页面
+   模板自带 body{background:var(--bg)}；这些背景都是不透明的，会盖住 z-index:-1
+   的照片层。必须整条链路（html → body → gradio-app → .gradio-container）
+   全部透明，照片才能透出来（内联样式是普通优先级，!important 可压过）。 */
+html, body, gradio-app, .gradio-container {
+  background: transparent !important;
 }
+body { margin: 0; }
 /* 照片背景用 z-index:-1 的固定定位伪元素承载：
    - 永远垫在所有内容之下（不依赖页面结构里有没有 .gradio-container，
      登录页等 FastAPI 直渲染页面同样安全）；
@@ -74,6 +88,18 @@ body::before {
   font-family: var(--font-stack) !important;
 }
 .gradio-container { font-variant-numeric: tabular-nums; }
+
+/* ── 显示比例还原：css= 注入路径失效期间主页面回落到了 Gradio 默认
+   小字号（12/14px）。这里按主题变量整体上调约 1px，恢复原有观感，
+   下拉/表格等组件字号随主题变量联动。 ── */
+.gradio-container {
+  --text-sm: 13px !important; --block-info-text-size: 13px !important;
+  --block-label-text-size: 13px !important; --block-title-text-size: 14px !important;
+  --body-text-size: 15px !important; --text-md: 15px !important;
+  --text-lg: 17px !important; --text-xl: 23px !important;
+  --text-xxl: 26px !important;
+}
+.gradio-container.gradio-container-6-26-0 { font-size: var(--text-md) !important; }
 
 /* ── 隐藏 Gradio 自带页脚（API/品牌/设置入口，避免误触）── */
 .gradio-container footer, .gradio-container .footer { display: none !important; }
@@ -342,20 +368,21 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
 .wd-img-card .wd-img-title { font-size:13px; color:var(--text-2); margin-bottom:8px; }
 .wd-img-card img { width:100%; height:auto; display:block; border-radius:6px; }
 
-/* ── 认证页（登录/注册/初始化，§10）────────────────── */
+/* ── 认证页（登录/注册/初始化，§10）── 卡片加宽加大，输入区更舒展 */
 .wd-auth-wrap { min-height:calc(100vh - 40px); display:flex; align-items:center;
-  justify-content:center; padding:20px 16px; }
-.wd-auth-card { width:100%; max-width:400px; background:var(--bg-card);
-  border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-2);
-  padding:28px 26px 24px; }
-.wd-auth-card h1 { font-size:20px; margin:0 0 4px; color:var(--text-1);
-  display:flex; align-items:center; gap:8px; }
-.wd-auth-sub { font-size:13px; color:var(--text-3); margin:0 0 18px; line-height:1.5; }
-.wd-field { margin-bottom:14px; }
-.wd-field label { display:block; font-size:13px; color:var(--text-2);
-  font-weight:600; margin-bottom:5px; }
+  justify-content:center; padding:24px 16px; }
+.wd-auth-card { width:100%; max-width:480px; background:var(--bg-card);
+  border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow-2);
+  padding:36px 40px 32px; }
+.wd-auth-card h1 { font-size:24px; margin:0 0 6px; color:var(--text-1);
+  display:flex; align-items:center; gap:10px; }
+.wd-auth-card h1 svg { width:30px; height:30px; }
+.wd-auth-sub { font-size:14px; color:var(--text-3); margin:0 0 22px; line-height:1.55; }
+.wd-field { margin-bottom:16px; }
+.wd-field label { display:block; font-size:14px; color:var(--text-2);
+  font-weight:600; margin-bottom:6px; }
 .wd-field input[type="text"], .wd-field input[type="password"] {
-  width:100%; box-sizing:border-box; padding:10px 12px; font-size:14px;
+  width:100%; box-sizing:border-box; padding:12px 14px; font-size:15px;
   border:1px solid var(--border); border-radius:8px; background:#fff;
   color:var(--text-1); }
 .wd-field input:focus { outline:2px solid var(--brand-500); outline-offset:1px;
@@ -374,12 +401,12 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
   font-size:13px; color:var(--text-3); }
 .wd-auth-alt a { color:var(--brand-500); font-weight:600; text-decoration:none; }
 .wd-auth-alt a:hover { text-decoration:underline; }
-.wd-btn-primary-block { width:100%; padding:11px 0; font-size:15px; font-weight:600;
+.wd-btn-primary-block { width:100%; padding:13px 0; font-size:16px; font-weight:600;
   background:var(--brand-700); color:#fff; border:none; border-radius:8px;
-  cursor:pointer; margin-top:6px; }
+  cursor:pointer; margin-top:8px; }
 .wd-btn-primary-block:hover { background:var(--brand-500); }
-.wd-auth-banner { max-width:400px; margin:0 auto 12px; border-radius:8px;
-  padding:10px 14px; font-size:13px; line-height:1.5; }
+.wd-auth-banner { max-width:480px; margin:0 auto 12px; border-radius:8px;
+  padding:11px 14px; font-size:13px; line-height:1.5; }
 .wd-auth-banner.wd-banner-warn { background:#FEF5E7; border:1px solid #F5B041; color:#7E5109; }
 .wd-auth-banner.wd-banner-error { background:var(--danger-bg, #FDEDEC); border:1px solid #EC7063; color:#943126; }
 

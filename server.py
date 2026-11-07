@@ -629,15 +629,32 @@ def create_app():
     # Gradio 静态资源全部 404，导致主页面白屏。
     # 仍须在 Gradio 挂载到 "/" 之前注册，否则会被 "/" 通配路由吞掉。
     from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import Response
     assets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+
+    # 全局样式：以真实 CSS 文件形式提供（主页面经 head <link> 引用）。
+    # 必须注册在 /wd-assets 静态目录挂载之前——Mount 会匹配整个前缀，
+    # 后注册的精确路由会被它遮住。
+    @fastapp.get("/wd-assets/base.css")
+    async def wd_base_css():
+        return Response(uc.BASE_CSS, media_type="text/css",
+                        headers={"Cache-Control": "public, max-age=3600"})
+
     if os.path.isdir(assets_dir):
         fastapp.mount("/wd-assets", StaticFiles(directory=assets_dir), name="wd-assets")
 
     demo = app_module.build_ui()
+    # 全局样式经 head 以 <style> 内联注入（Gradio 运行时用 DOMParser 重建
+    # head 参数里的元素并原样拷贝 textContent，<style> 内容保持顶层作用域）。
+    # 不能用 css= 参数：Gradio 会给 css= 的每条规则加
+    # ".gradio-container… .contain" 前缀，html/body/:root 顶层规则被前缀化后
+    # 在主页面全部失效（背景照片/字体/透明度全丢）——此前白底问题的根因之一。
+    # 也不用 <link>：实测 head 里的 <link> 在主页面不生效（渲染探针证实），
+    # 内联 <style> 同步生效、无加载时序问题。
     gr.mount_gradio_app(
         fastapp, demo, path="/",
         theme=gr.themes.Soft(primary_hue="blue"),
-        css=uc.BASE_CSS,
+        head="<style>" + uc.BASE_CSS + "</style>",
         js=getattr(demo, "_wd_badge_js", None),
         show_error=True,
         footer_links=[],  # 隐藏 Gradio 自带页脚（Use via API / Built with Gradio / 设置等）
