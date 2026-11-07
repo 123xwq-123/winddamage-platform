@@ -658,9 +658,10 @@ def create_app():
         head="<style>" + uc.BASE_CSS + "</style>",
         js=getattr(demo, "_wd_badge_js", None),
         show_error=True,
-        # "设置"入口已上移到页面右上角用户徽章栏（?view=settings），
-        # 页脚整体隐藏（2026-11 用户要求把设置放到退出登录后面）。
-        footer_links=[],
+        # 页脚保留 settings：设置面板开关是 Gradio 前端页脚按钮的私有状态，
+        # 无 ?view=settings 的公开路由；右上角"设置"链接靠程序化点击该按钮。
+        # 页脚视觉由 CSS 隐藏（见 ui_components BASE_CSS 尾部）。
+        footer_links=["settings"],
     )
     return fastapp
 

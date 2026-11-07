@@ -875,12 +875,19 @@ _BADGE_JS = """
       + '<a href="/change-password">__PW_LINK__</a>'
       + '<a href="/logout">__LOGOUT_LINK__</a>'
       + '<a href="javascript:void(0)" id="wd-settings-link">__SETTINGS_LINK__</a>';
+    // "设置"：Gradio 设置面板的开关是页脚按钮的私有组件状态，
+    // 唯一入口是页脚 Settings 按钮（footer[aria-label] 内 alt 含 settings 的按钮）。
+    // 页脚本体已用 CSS 隐藏，这里程序化点击它即可打开面板。
     const sl = document.getElementById('wd-settings-link');
     if (sl) sl.addEventListener('click', () => {
-      const t = new URLSearchParams(window.location.search);
-      t.set('view', 'settings');
-      history.replaceState(null, '', '?' + t.toString());
-      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      const btn = document.querySelector(
+        'footer[aria-label] button:has(img[alt*="etting" i]),'
+        + ' footer[aria-label] button:has(img[alt*="设置"])');
+      if (btn) { btn.click(); return; }
+      // 兜底：任何 alt 含 设置/Settings 的页脚图片的最近按钮祖先
+      const img = Array.from(document.querySelectorAll('footer[aria-label] img'))
+        .find(im => /setting|设置/i.test(im.getAttribute('alt') || ''));
+      if (img) { (img.closest('button') || img.parentElement || img).click(); }
     });
     return true;
   };

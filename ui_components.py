@@ -432,6 +432,15 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
 .wd-user-badge a:hover { text-decoration:underline; }
 .wd-user-badge .wd-ub-name { font-weight:600; color:var(--text-2);
   max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ── Gradio 页脚：设置按钮的宿主，视觉上隐藏但保留在 DOM ──
+   右上角"设置"链接靠程序化点击页脚按钮打开设置面板（组件私有状态，
+   无公开路由），故 footer_links 须含 "settings"，此处只做视觉隐藏。 */
+.gradio-container footer[aria-label] {
+  position: absolute !important; width: 1px !important; height: 1px !important;
+  overflow: hidden !important; clip-path: inset(50%) !important;
+  pointer-events: none !important;
+}
 """
 
 
