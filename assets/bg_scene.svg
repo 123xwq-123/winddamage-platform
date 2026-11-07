@@ -1,0 +1,52 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 520' preserveAspectRatio='xMidYMax meet'>
+  <defs>
+    <linearGradient id='sky' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0' stop-color='#D8E9F6' stop-opacity='0.85'/>
+      <stop offset='1' stop-color='#F5F7FA' stop-opacity='0.15'/>
+    </linearGradient>
+    <linearGradient id='hill1' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0' stop-color='#C9DCCE'/>
+      <stop offset='1' stop-color='#E7F0E8'/>
+    </linearGradient>
+    <linearGradient id='hill2' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0' stop-color='#B7D0BC'/>
+      <stop offset='1' stop-color='#DCEAE0'/>
+    </linearGradient>
+  </defs>
+  <rect width='1440' height='520' fill='url(#sky)'/>
+  <ellipse cx='280' cy='84' rx='88' ry='18' fill='#FFFFFF' opacity='0.55'/>
+  <ellipse cx='340' cy='70' rx='60' ry='14' fill='#FFFFFF' opacity='0.45'/>
+  <ellipse cx='980' cy='60' rx='100' ry='16' fill='#FFFFFF' opacity='0.5'/>
+  <ellipse cx='1250' cy='120' rx='70' ry='13' fill='#FFFFFF' opacity='0.4'/>
+  <path d='M0,398 Q220,326 470,376 T950,366 T1440,388 L1440,520 L0,520 Z' fill='url(#hill1)' opacity='0.85'/>
+  <g>
+    <g transform='translate(255,282)'>
+      <path d='M-4,180 L4,180 L2.2,0 L-2.2,0 Z' fill='#F4F7F9' stroke='#9FB2C1' stroke-width='1.2'/>
+      <circle r='5' fill='#EAF0F4' stroke='#9FB2C1' stroke-width='1.2'/>
+      <g fill='#FBFDFE' stroke='#9FB2C1' stroke-width='1'>
+        <path d='M0,-5 C7,-25 9,-53 3,-75 C1,-80 -1,-80 -3,-75 C-9,-53 -7,-25 0,-5 Z'/>
+        <path d='M0,-5 C7,-25 9,-53 3,-75 C1,-80 -1,-80 -3,-75 C-9,-53 -7,-25 0,-5 Z' transform='rotate(120)'/>
+        <path d='M0,-5 C7,-25 9,-53 3,-75 C1,-80 -1,-80 -3,-75 C-9,-53 -7,-25 0,-5 Z' transform='rotate(240)'/>
+      </g>
+    </g>
+    <g transform='translate(700,244) scale(0.72)'>
+      <path d='M-4,180 L4,180 L2.2,0 L-2.2,0 Z' fill='#F4F7F9' stroke='#9FB2C1' stroke-width='1.4'/>
+      <circle r='5' fill='#EAF0F4' stroke='#9FB2C1' stroke-width='1.4'/>
+      <g fill='#FBFDFE' stroke='#9FB2C1' stroke-width='1.2'>
+        <path d='M0,-5 C7,-25 9,-53 3,-75 C1,-80 -1,-80 -3,-75 C-9,-53 -7,-25 0,-5 Z'/>
+        <path d='M0,-5 C7,-25 9,-53 3,-75 C1,-80 -1,-80 -3,-75 C-9,-53 -7,-25 0,-5 Z' transform='rotate(75)'/>
+        <path d='M0,-5 C7,-25 9,-53 3,-75 C1,-80 -1,-80 -3,-75 C-9,-53 -7,-25 0,-5 Z' transform='rotate(195)'/>
+      </g>
+    </g>
+    <g transform='translate(1150,290) scale(1.12)'>
+      <path d='M-4,180 L4,180 L2.2,0 L-2.2,0 Z' fill='#F4F7F9' stroke='#9FB2C1' stroke-width='1.2'/>
+      <circle r='5' fill='#EAF0F4' stroke='#9FB2C1' stroke-width='1.2'/>
+      <g fill='#FBFDFE' stroke='#9FB2C1' stroke-width='1'>
+        <path d='M0,-5 C7,-25 9,-53 3,-75 C1,-80 -1,-80 -3,-75 C-9,-53 -7,-25 0,-5 Z'/>
+        <path d='M0,-5 C7,-25 9,-53 3,-75 C1,-80 -1,-80 -3,-75 C-9,-53 -7,-25 0,-5 Z' transform='rotate(200)'/>
+        <path d='M0,-5 C7,-25 9,-53 3,-75 C1,-80 -1,-80 -3,-75 C-9,-53 -7,-25 0,-5 Z' transform='rotate(320)'/>
+      </g>
+    </g>
+  </g>
+  <path d='M0,442 Q360,392 720,432 T1440,428 L1440,520 L0,520 Z' fill='url(#hill2)' opacity='0.95'/>
+</svg>

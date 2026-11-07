@@ -40,9 +40,46 @@ BASE_CSS = """
   --ease-standard:cubic-bezier(.2,0,0,1);
 }
 
-/* ── 页面基调 ─────────────────────────────────────── */
-.gradio-container, body { background: var(--bg-page) !important; }
+/* ── 页面基调（风机场景背景 + 宋体/Times New Roman 字体）── */
+:root {
+  --bg-scene: url("/assets/bg_scene.svg");
+  --font-stack: "Times New Roman", "SimSun", "宋体", "NSimSun", serif;
+}
+body, .gradio-container {
+  background: var(--bg-page) var(--bg-scene) no-repeat fixed bottom center / 100% auto !important;
+}
+.gradio-container, .gradio-container button, .gradio-container input,
+.gradio-container textarea, .gradio-container select,
+.gradio-container .prose, body, body button, body input, body select, body textarea {
+  font-family: var(--font-stack) !important;
+}
 .gradio-container { font-variant-numeric: tabular-nums; }
+
+/* ── 隐藏 Gradio 自带页脚（API/品牌/设置入口，避免误触）── */
+.gradio-container footer, .gradio-container .footer { display: none !important; }
+
+/* ── 下拉选择框：字号随框宽自适应 + 更顺滑的展开/悬停 ── */
+.gradio-container .dropdown input,
+.gradio-container .dropdown button,
+.gradio-container .wrap.default.dropdown,
+.gradio-container ul.options,
+.gradio-container ul.options li {
+  font-size: clamp(13px, 0.35vw + 11.5px, 15px) !important;
+}
+.gradio-container ul.options {
+  max-height: 300px; overflow-y: auto;
+  animation: wd-dd-in var(--duration-fast) var(--ease-standard);
+}
+@keyframes wd-dd-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+.gradio-container ul.options li {
+  padding: 8px 12px; cursor: pointer; user-select: none;
+  transition: background 100ms linear;
+}
+.gradio-container ul.options li:hover,
+.gradio-container ul.options li.selected { background: var(--brand-100); }
 
 .main-title { text-align:center; padding:14px 0 6px; }
 .main-title h1 { font-size:26px; color:var(--brand-700); margin-bottom:4px; letter-spacing:.5px; }
@@ -243,6 +280,53 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
 .wd-btn:focus-visible, button:focus-visible, a:focus-visible {
   outline:2px solid var(--brand-500); outline-offset:2px; }
 
+/* ── 历史记录抽屉快捷预览（右侧滑出，iframe 加载独立详情页）── */
+.wd-drawer-mask { position:fixed; inset:0; background:var(--overlay); z-index:9998;
+  opacity:0; pointer-events:none;
+  transition:opacity var(--duration-normal) var(--ease-standard); }
+.wd-drawer-mask.wd-open { opacity:1; pointer-events:auto; }
+.wd-drawer { position:fixed; top:0; right:0; height:100vh; width:min(600px,94vw);
+  background:var(--bg-card); box-shadow:var(--shadow-2); z-index:9999;
+  display:flex; flex-direction:column;
+  transform:translateX(102%);
+  transition:transform var(--duration-normal) var(--ease-standard); }
+.wd-drawer.wd-open { transform:none; }
+.wd-drawer-head { display:flex; align-items:center; gap:12px; padding:12px 16px;
+  border-bottom:1px solid var(--border); background:var(--table-head); }
+.wd-drawer-head .wd-drawer-title { flex:1; font-size:15px; font-weight:600;
+  color:var(--brand-700); }
+.wd-drawer-head a { font-size:13px; color:var(--brand-500); font-weight:600;
+  text-decoration:none; white-space:nowrap; }
+.wd-drawer-head a:hover { text-decoration:underline; }
+.wd-drawer-head button { font-size:13px; padding:5px 14px; cursor:pointer;
+  border:1px solid var(--border); border-radius:6px; background:var(--bg-card);
+  color:var(--text-1); }
+.wd-drawer-head button:hover { background:var(--brand-100); }
+.wd-drawer-body { flex:1; overflow-y:auto; padding:14px 16px; }
+.wd-drawer-body iframe { width:100%; height:100%; min-height:calc(100vh - 70px);
+  border:none; display:block; }
+.wd-preview-link { color:var(--brand-500); cursor:pointer; user-select:none;
+  font-size:12px; margin-left:8px; text-decoration:underline; white-space:nowrap; }
+.wd-preview-link:hover { color:var(--brand-700); }
+.wd-mcard-actions .wd-preview-link { flex:0 0 auto; margin-left:0; margin-right:8px;
+  text-align:center; border:1px solid var(--border); border-radius:6px;
+  padding:8px 12px; color:var(--brand-700); text-decoration:none;
+  background:var(--bg-card); display:inline-block; }
+
+/* ── 批量进度日志（可滚动，column-reverse 使新内容保持在视野底部）── */
+.wd-progress-box { max-height:230px; overflow-y:auto; display:flex;
+  flex-direction:column-reverse; border:1px solid var(--border); border-radius:8px;
+  background:var(--table-head); }
+.wd-progress-box pre.wd-progress-log { margin:0; padding:10px 12px;
+  font-size:13px; line-height:1.7; white-space:pre-wrap; word-break:break-all;
+  font-family:var(--font-stack) !important; color:var(--text-1); }
+
+/* ── 记录巡检图像卡（历史详情 / 独立页 / 抽屉预览共用）────── */
+.wd-img-card { background:var(--bg-card); border:1px solid var(--border);
+  border-radius:8px; box-shadow:var(--shadow-1); padding:10px 12px; margin-bottom:16px; }
+.wd-img-card .wd-img-title { font-size:13px; color:var(--text-2); margin-bottom:8px; }
+.wd-img-card img { width:100%; height:auto; display:block; border-radius:6px; }
+
 /* ── 认证页（登录/注册/初始化，§10）────────────────── */
 .wd-auth-wrap { min-height:calc(100vh - 40px); display:flex; align-items:center;
   justify-content:center; padding:20px 16px; }
@@ -435,8 +519,9 @@ def data_table(headers, rows_html: str) -> str:
 
 def mobile_history_card(badge_html: str, image_name: str, meta_html: str,
                         detail_url: str, detail_label: str,
-                        danger: bool = False) -> str:
-    """移动端历史记录卡片（§7：<768px 替代表格）。"""
+                        danger: bool = False,
+                        preview_html: str = "") -> str:
+    """移动端历史记录卡片（§7：<768px 替代表格）。preview_html 为抽屉预览触发器。"""
     cls = " wd-row-danger" if danger else ""
     return (
         f'<div class="wd-mcard{cls}">'
@@ -444,6 +529,7 @@ def mobile_history_card(badge_html: str, image_name: str, meta_html: str,
         f'<div class="wd-mcard-name">{esc(image_name)}</div>'
         f'<div class="wd-mcard-meta">{meta_html}</div>'
         f'<div class="wd-mcard-actions">'
+        f'{preview_html}'
         f'<a class="wd-mcard-primary" href="{esc(detail_url)}">{esc(detail_label)}</a>'
         f"</div></div>"
     )

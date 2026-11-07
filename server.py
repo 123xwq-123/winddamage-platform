@@ -590,10 +590,35 @@ def create_app():
         back = (f'<div class="wd-page-head">'
                 f'<a class="wd-backlink" href="/">← {tr("tab_history")} / {tr("app_title")}</a>'
                 f"</div>")
-        body = f"{back}{detail_html}"
+        body = f"{back}{app_module._record_image_html(record)}{detail_html}"
         return HTMLResponse(uc.page_shell(f'#{record_id} · {tr("app_title")}', body))
 
+    # ─── 记录持久化图像 /history/{id}/image（权限与详情页一致）──
+    @fastapp.get("/history/{record_id}/image")
+    async def history_record_image(record_id: int, request: Request):
+        from fastapi.responses import FileResponse
+        import image_store
+        user_id, is_admin = app_module._current_scope(request)
+        record = get_record(record_id)
+        if not record:
+            return _error_page(tr("msg_record_not_found", id=record_id), 404)
+        if not can_access(record, user_id, is_admin):
+            return _error_page(tr("msg_record_no_access"), 403)
+        if not record["image_file_id"]:
+            return _error_page(tr("msg_image_missing"), 404)
+        path = image_store.get_image_path(record["image_file_id"])
+        if not path or not os.path.exists(path):
+            return _error_page(tr("msg_image_missing"), 404)
+        return FileResponse(path)
+
     # ─── Gradio 主应用挂载 ──────────────────────────────────
+    # 静态资源：页面背景场景图（BASE_CSS 引用 /assets/bg_scene.svg）。
+    # 必须在 Gradio 挂载到 "/" 之前注册，否则会被 "/" 通配路由吞掉。
+    from fastapi.staticfiles import StaticFiles
+    assets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+    if os.path.isdir(assets_dir):
+        fastapp.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
     demo = app_module.build_ui()
     gr.mount_gradio_app(
         fastapp, demo, path="/",
@@ -601,6 +626,7 @@ def create_app():
         css=uc.BASE_CSS,
         js=getattr(demo, "_wd_badge_js", None),
         show_error=True,
+        footer_links=[],  # 隐藏 Gradio 自带页脚（Use via API / Built with Gradio / 设置等）
     )
     return fastapp
 

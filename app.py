@@ -248,10 +248,17 @@ def analyze_single(image, request: gr.Request = None):
 #  Tab 2: 批量检测（生成器：边分析边刷新进度）
 # ══════════════════════════════════════════════════════════
 
+def _batch_progress_html(banner_html: str, log_lines) -> str:
+    """批量进度：状态横幅 + 可滚动日志（column-reverse 保证最新行可见）。"""
+    log = uc.esc("\n".join(log_lines)) if log_lines else "—"
+    return (f'{banner_html}'
+            f'<div class="wd-progress-box"><pre class="wd-progress-log">{log}</pre></div>')
+
+
 def analyze_batch(files, request: gr.Request = None):
-    """批量分析多张图片。生成器逐张产出 (summary, table_html, status)，实时刷新进度。"""
+    """批量分析多张图片。生成器逐张产出 (summary, table_html, progress_html)，实时刷新进度。"""
     if not files:
-        yield "", _empty_result_html(), tr("msg_upload_first")
+        yield "", _empty_result_html(), _batch_progress_html("", [])
         return
 
     owner_id, created_by = _scope_owner(request)
@@ -266,8 +273,8 @@ def analyze_batch(files, request: gr.Request = None):
     header = [tr("hdr_image"), tr("hdr_risk"), tr("hdr_damage"), tr("hdr_damage_type"),
               tr("hdr_component"), tr("hdr_priority"), tr("hdr_time_cost")]
 
-    def render_table():
-        """已完成的行 → 样式化表格。"""
+    def render_table(collapsed: bool = False):
+        """已完成的行 → 可折叠的样式化表格（点表头收起/展开）。"""
         rows = []
         for idx, row in enumerate(results):
             row_cls = ' class="wd-row-danger"' if high_flags[idx] else ""
@@ -276,16 +283,23 @@ def analyze_batch(files, request: gr.Request = None):
                 for j, c in enumerate(row)
             )
             rows.append(f"<tr{row_cls}>{tds}</tr>")
-        return uc.data_table(header, "".join(rows))
+        table = uc.data_table(header, "".join(rows))
+        open_attr = "" if collapsed else " open"
+        return (f'<details class="wd-sec"{open_attr}>'
+                f'<summary><span>📋</span><span>{uc.esc(tr("batch_detail_title"))}'
+                f'（{ok_count + fail_count}/{total}）</span></summary>'
+                f'<div class="wd-sec-body">{table}</div></details>')
 
-    yield "", uc.status_banner(tr("msg_progress", i=0, total=total, name="…"), "info"), ""
+    banner0 = uc.status_banner(tr("msg_progress", i=0, total=total, name="…"), "info")
+    yield "", "", _batch_progress_html(banner0, status_parts)
 
     for i, f in enumerate(files):
         image_path = f if isinstance(f, str) else f.name
         image_name = os.path.basename(image_path)
 
-        yield "", uc.status_banner(tr("msg_progress", i=i + 1, total=total, name=uc.esc(image_name)), "info"), \
-              uc.esc("\n".join(status_parts))
+        banner = uc.status_banner(
+            tr("msg_progress", i=i + 1, total=total, name=uc.esc(image_name)), "info")
+        yield "", render_table(), _batch_progress_html(banner, status_parts)
 
         try:
             parsed, raw, infer_time = _do_inference(image_path)
@@ -295,8 +309,8 @@ def analyze_batch(files, request: gr.Request = None):
                 results.append([uc.esc(image_name), "❌", "—", "—", "—", "—", f"{infer_time:.1f}s"])
                 high_flags.append(False)
                 status_parts.append(f'[{i+1}/{total}] {image_name}: ❌ {tr("msg_parse_fail")}')
-                yield tr("batch_partial", ok=ok_count, total=total, failed=fail_count), render_table(), \
-                      uc.esc("\n".join(status_parts))
+                yield tr("batch_partial", ok=ok_count, total=total, failed=fail_count), \
+                      render_table(), _batch_progress_html(banner, status_parts)
                 continue
 
             ok_count += 1
@@ -331,13 +345,14 @@ def analyze_batch(files, request: gr.Request = None):
             high_flags.append(False)
             status_parts.append(f"[{i+1}/{total}] {image_name}: ❌ {e}")
 
-        yield tr("batch_partial", ok=ok_count, total=total, failed=fail_count) if fail_count \
-              else tr("batch_done", ok=ok_count, total=total), \
-              render_table(), uc.esc("\n".join(status_parts))
+        done_summary = tr("batch_partial", ok=ok_count, total=total, failed=fail_count) if fail_count \
+            else tr("batch_done", ok=ok_count, total=total)
+        yield done_summary, render_table(), _batch_progress_html(banner, status_parts)
 
     final_summary = tr("batch_partial", ok=ok_count, total=total, failed=fail_count) if fail_count \
         else tr("batch_done", ok=ok_count, total=total)
-    yield final_summary, render_table(), uc.esc("\n".join(status_parts))
+    final_banner = uc.status_banner(final_summary, "warn" if fail_count else "success")
+    yield final_summary, render_table(), _batch_progress_html(final_banner, status_parts)
 
 
 # ══════════════════════════════════════════════════════════
@@ -383,6 +398,83 @@ def _risk_badge_cell(high_risk) -> str:
     return f'<span class="wd-badge wd-badge-{cls}">{txt}</span>'
 
 
+def _record_image_html(record) -> str:
+    """巡检图像卡：有持久化图像时返回 <img>（走 /history/{id}/image 权限路由）。"""
+    if not record or not record.get("image_file_id"):
+        return ""
+    rid = record["id"]
+    name = uc.esc(record["image_name"] or f"#{rid}")
+    return (f'<div class="wd-img-card">'
+            f'<div class="wd-img-title">🖼 {uc.esc(tr("img_section"))} · {name}</div>'
+            f'<img src="/history/{rid}/image" alt="{name}" loading="lazy"/></div>')
+
+
+# 抽屉交互脚本：页面加载时注入一次，用 document 级事件委托——
+# 历史列表每次刷新重建 DOM，委托监听不受影响。预览内容走 /history/{id}
+# 独立页（服务端会话鉴权），iframe 内不承载任何额外权限。
+_DRAWER_JS = """
+() => {
+  var lastRid = null;
+  function drawerEls() {
+    return {
+      mask: document.getElementById("wd-drawer-mask"),
+      drawer: document.getElementById("wd-drawer"),
+      frame: document.getElementById("wd-drawer-frame"),
+      openLink: document.getElementById("wd-drawer-open"),
+      titleEl: document.getElementById("wd-drawer-title")
+    };
+  }
+  function show(rid, name) {
+    var el = drawerEls();
+    if (!el.drawer) return;
+    lastRid = rid;
+    el.frame.src = "/history/" + rid;
+    el.openLink.href = "/history/" + rid;
+    el.titleEl.textContent = "#" + rid + (name ? " · " + name : "");
+    el.mask.classList.add("wd-open");
+    el.drawer.classList.add("wd-open");
+  }
+  function hide() {
+    var el = drawerEls();
+    if (!el.drawer) return;
+    el.mask.classList.remove("wd-open");
+    el.drawer.classList.remove("wd-open");
+    setTimeout(function() { el.frame.src = "about:blank"; }, 240);
+  }
+  document.addEventListener("click", function(e) {
+    var p = e.target.closest ? e.target.closest(".wd-preview-link") : null;
+    if (p) {
+      e.preventDefault();
+      show(p.getAttribute("data-rid"), p.getAttribute("data-name"));
+      return;
+    }
+    if (e.target.id === "wd-drawer-mask" ||
+        (e.target.closest && e.target.closest("#wd-drawer-close"))) {
+      hide();
+    }
+  });
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") hide();
+  });
+}
+"""
+
+
+def _drawer_shell_html() -> str:
+    """抽屉骨架（含当前语言标签）。静态组件，构建时渲染一次，不随后续刷新重建。"""
+    return (
+        '<div class="wd-drawer-mask" id="wd-drawer-mask"></div>'
+        '<div class="wd-drawer" id="wd-drawer" role="dialog" aria-modal="true">'
+        '<div class="wd-drawer-head">'
+        f'<span class="wd-drawer-title" id="wd-drawer-title">{uc.esc(tr("drawer_title"))}</span>'
+        f'<a id="wd-drawer-open" href="#" target="_blank" rel="noopener">{uc.esc(tr("drawer_open_page"))}</a>'
+        f'<button type="button" id="wd-drawer-close">{uc.esc(tr("drawer_close"))}</button>'
+        '</div>'
+        '<div class="wd-drawer-body"><iframe id="wd-drawer-frame" title="preview"></iframe></div>'
+        '</div>'
+    )
+
+
 def _history_list_html(records, total, filtered):
     """历史列表：桌面表格 + 移动卡片双渲染（CSS 切换）。"""
     if not records:
@@ -396,6 +488,7 @@ def _history_list_html(records, total, filtered):
     header = [tr("hdr_id"), tr("hdr_timestamp"), tr("hdr_image"), tr("hdr_risk"),
               tr("hdr_damage"), tr("hdr_damage_type"), tr("hdr_component"),
               tr("hdr_priority"), tr("hdr_confidence"), tr("hdr_infer_time")]
+    preview_label = uc.esc(tr("preview_btn"))
     rows, cards = [], []
     for r in records:
         rid = r["id"]
@@ -403,10 +496,12 @@ def _history_list_html(records, total, filtered):
         row_cls = ' class="wd-row-danger"' if high else ""
         src_tag = (f' <span class="wd-badge wd-badge-muted">{tr("badge_migrated")}</span>'
                    if r.get("source") == "migration" else "")
+        preview = (f'<span class="wd-preview-link" data-rid="{rid}" '
+                   f'data-name="{uc.esc(r["image_name"])}">🔍 {preview_label}</span>')
         cells = [
             f'<td class="wd-num">{rid}</td>',
             f'<td class="wd-num">{uc.esc(r["timestamp"])}</td>',
-            f"<td>{uc.esc(r['image_name'])}{src_tag}</td>",
+            f"<td>{uc.esc(r['image_name'])}{src_tag}{preview}</td>",
             f"<td>{_risk_badge_cell(high)}</td>",
             f"<td>{uc.risk_badge(tr_value(r['has_damage'])) if r['has_damage'] else '—'}</td>",
             f"<td>{uc.esc(tr_value(r['damage_type'])) if r['damage_type'] else '—'}</td>",
@@ -422,7 +517,10 @@ def _history_list_html(records, total, filtered):
                 f'{r["infer_time"] or "—"}s')
         cards.append(uc.mobile_history_card(
             _risk_badge_cell(high), r["image_name"], meta,
-            f"/history/{rid}", tr("btn_view_detail"), danger=high))
+            f"/history/{rid}", tr("btn_view_detail"), danger=high,
+            preview_html=(f'<a class="wd-preview-link" data-rid="{rid}" '
+                          f'data-name="{uc.esc(r["image_name"])}" href="#">'
+                          f'🔍 {preview_label}</a>')))
 
     return (
         f'<div class="wd-total-count" style="margin:0 0 10px;">'
@@ -526,7 +624,8 @@ def view_history_detail(record_id_str, request: gr.Request = None):
     link = (f'<div style="margin-bottom:10px;">'
             f'<a class="wd-backlink" href="/history/{record["id"]}" target="_blank">'
             f'{tr("open_full_page")}</a></div>')
-    return link + detail_html, formatted["json_str"], record.get("note") or ""
+    return _record_image_html(record) + link + detail_html, \
+        formatted["json_str"], record.get("note") or ""
 
 
 def save_note(record_id_str, note, request: gr.Request = None):
@@ -582,30 +681,41 @@ def do_delete_record(record_id_str, request: gr.Request = None):
 
 
 def do_clear_history(typed, request: gr.Request = None):
-    """清空记录：需输入「确认清空」文字（分级删除最高档）。
+    """清空记录第一步：校验确认文字，弹出二次确认条（不执行删除）。
 
     权限模型：admin 清空全库；普通用户只清空自己的记录。
+    返回 (confirm_row_update, confirm_banner_html, filter_status)。
     """
     typed = (typed or "").strip()
     user_id, is_admin = _current_scope(request)
     if user_id is None and not is_admin:
-        return "", "", "", gr.update(), "", tr("auth_need_login")
+        return gr.update(visible=False), "", tr("auth_need_login")
     scope = None if is_admin else user_id
     total = get_stats(scope)["total"]
     if total == 0:
-        stats_html, list_html, page_info, dd, _ = query_history(
-            "", "", "", "", "time_desc", 20, 1, request=request)
-        return stats_html, list_html, page_info, dd, "", tr("msg_confirm_first")
+        return gr.update(visible=False), "", tr("msg_confirm_first")
     if typed != tr("clear_typed_word"):
-        return "", "", "", gr.update(), "", tr("msg_clear_typed_wrong")
-    n = total
+        return gr.update(visible=False), "", tr("msg_clear_typed_wrong")
+    banner = ('<div class="wd-banner" style="margin-bottom:8px;">'
+              '<span class="wd-banner-text" style="color:var(--danger-deep);">'
+              f'{uc.esc(tr("clear_confirm_banner"))}</span></div>')
+    return gr.update(visible=True), banner, tr("msg_clear_need_confirm")
+
+
+def do_clear_confirm(request: gr.Request = None):
+    """清空记录第二步：二次确认后执行删除。"""
+    user_id, is_admin = _current_scope(request)
+    if user_id is None and not is_admin:
+        return "", "", "", gr.update(), "", gr.update(visible=False), tr("auth_need_login")
+    n = get_stats(None if is_admin else user_id)["total"]
     if is_admin:
         clear_all()
     else:
         clear_user_records(user_id)
     stats_html, list_html, page_info, dd, _ = query_history(
         "", "", "", "", "time_desc", 20, 1, request=request)
-    return stats_html, list_html, page_info, dd, "", tr("msg_deleted_n", n=n)
+    return (stats_html, list_html, page_info, dd, "",
+            gr.update(visible=False), tr("msg_deleted_n", n=n))
 
 
 # ══════════════════════════════════════════════════════════
@@ -846,7 +956,7 @@ def build_ui():
                             file_count="multiple",
                         )
                         btn_batch = gr.Button(tr("btn_batch"), variant="primary", size="lg")
-                        batch_status = gr.Textbox(label=tr("progress_label"), lines=8, interactive=False)
+                        batch_status = gr.HTML(value="")
 
                     with gr.Column(scale=2):
                         batch_summary = gr.Markdown(tr("batch_waiting"))
@@ -918,6 +1028,9 @@ def build_ui():
                 with gr.Accordion(tr("json_accordion2"), open=False):
                     history_json = gr.Code(language="json", interactive=False)
 
+                # 抽屉快捷预览骨架（静态渲染一次；交互 JS 由页面加载脚本注入）
+                gr.HTML(value=_drawer_shell_html())
+
                 with gr.Row(equal_height=True):
                     note_tb = gr.Textbox(label=tr("note_label"), lines=2, scale=3)
                     btn_save_note = gr.Button(tr("btn_save_note"), scale=1)
@@ -966,9 +1079,13 @@ def build_ui():
                         btn_task_delete = gr.Button(
                             tr("btn_task_delete"), elem_classes=["wd-btn-danger"], scale=1)
 
-                # 清空（分级删除最高档：输入确认文字）
+                # 清空（分级删除最高档：输入确认文字 + 二次确认）
                 with gr.Accordion(tr("btn_clear_history"), open=False):
-                    gr.Markdown(tr("clear_warning"))
+                    gr.HTML(value=(
+                        '<div class="wd-banner" style="margin-bottom:12px;">'
+                        '<span class="wd-banner-text" '
+                        'style="color:var(--danger-deep);">'
+                        f'{uc.esc(tr("clear_warning"))}</span></div>'))
                     with gr.Row(equal_height=True):
                         clear_typed_tb = gr.Textbox(
                             label=tr("clear_typed_label"),
@@ -976,6 +1093,15 @@ def build_ui():
                         btn_clear_history = gr.Button(
                             tr("btn_clear_n", n=0), variant="stop",
                             elem_classes=["wd-btn-danger"], scale=1)
+                    clear_confirm_row = gr.Row(visible=False)
+                    with clear_confirm_row:
+                        clear_confirm_html = gr.HTML(value="")
+                        with gr.Row(equal_height=True):
+                            btn_clear_confirm = gr.Button(
+                                tr("btn_clear_confirm"), variant="stop",
+                                elem_classes=["wd-btn-danger"], scale=1)
+                            btn_clear_cancel = gr.Button(
+                                tr("btn_clear_cancel"), scale=1)
 
         # ─── 事件绑定 ───
         # Tab 1
@@ -1086,12 +1212,22 @@ def build_ui():
                      history_record_dd, confirm_row, filter_status],
         )
 
-        # 清空（输入确认文字）
+        # 清空（第一步：输入确认文字 → 弹二次确认；第二步：确认执行）
         btn_clear_history.click(
             fn=do_clear_history,
             inputs=[clear_typed_tb],
+            outputs=[clear_confirm_row, clear_confirm_html, filter_status],
+        )
+        btn_clear_confirm.click(
+            fn=do_clear_confirm,
+            inputs=[],
             outputs=[history_stats, history_list, page_info_html,
-                     history_record_dd, clear_typed_tb, filter_status],
+                     history_record_dd, clear_typed_tb, clear_confirm_row,
+                     filter_status],
+        )
+        btn_clear_cancel.click(
+            fn=lambda: gr.update(visible=False),
+            inputs=[], outputs=[clear_confirm_row],
         )
 
         # ─── 报告导出（§11）───
@@ -1128,8 +1264,10 @@ def build_ui():
         "</div>"
     )
 
-    # gradio 6：js 参数在 launch()/mount_gradio_app() 上传入（页面加载后注入用户徽章）
-    app._wd_badge_js = badge_js
+    # gradio 6：js 参数在 launch()/mount_gradio_app() 上传入
+    # （页面加载后注入用户徽章 + 抽屉快捷预览的事件委托）
+    drawer_js = _DRAWER_JS
+    app._wd_badge_js = f"() => {{ ({badge_js})(); ({drawer_js})(); }}"
     return app
 
 

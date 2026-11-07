@@ -136,15 +136,21 @@ class TestPermission(unittest.TestCase):
         self.assertIsNone(self.history.get_record(self.rec_b))
 
     def test_clear_history_scope(self):
-        # 普通用户清空：只清自己的
-        _s, _l, _p, _dd, _c, status = self.app.do_clear_history(
+        # 第一步（输入确认文字）只弹二次确认条，不执行删除
+        row_upd, banner, status = self.app.do_clear_history(
             self.app.tr("clear_typed_word"), request=self._req(self.ua_token))
+        self.assertTrue(row_upd.get("visible"))
+        self.assertIn(self.app.tr("clear_confirm_banner"), banner)
+        self.assertIsNotNone(self.history.get_record(self.rec_a))  # 尚未删除
+        # 第二步（确认）执行删除：普通用户只清自己的
+        _s, _l, _p, _dd, _c, _row, status = self.app.do_clear_confirm(
+            request=self._req(self.ua_token))
         self.assertIsNone(self.history.get_record(self.rec_a))    # 自己的没了
         self.assertIsNotNone(self.history.get_record(self.rec_b))  # 别人的还在
         self.assertIsNotNone(self.history.get_record(self.rec_m))  # 迁移数据还在
         # admin 清空：全库
-        _s, _l, _p, _dd, _c, status = self.app.do_clear_history(
-            self.app.tr("clear_typed_word"), request=self._req(self.admin_token))
+        _s, _l, _p, _dd, _c, _row, _status = self.app.do_clear_confirm(
+            request=self._req(self.admin_token))
         self.assertIsNone(self.history.get_record(self.rec_b))
         self.assertIsNone(self.history.get_record(self.rec_m))
 
