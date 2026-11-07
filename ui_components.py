@@ -131,6 +131,24 @@ body::before {
 .title-icon { display:inline-flex; vertical-align:-7px; margin-right:8px; }
 .footer-note { text-align:center; color:var(--text-3); font-size:12px; padding:12px 0 4px; margin-top:10px; }
 
+/* ── 吸顶导航栏：标题（左） + 用户徽章（右），滚动时常驻顶部 ──
+   半透明底 + 毛玻璃模糊，压过照片背景保证可读；z-index 低于
+   抽屉(9998/9999)与设置弹层(9990/9991)，避免盖住浮层。 */
+.wd-topbar { position:sticky; top:0; z-index:900;
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:9px 22px; background:rgba(255,255,255,.86);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--border); box-shadow:var(--shadow-1); }
+.wd-topbar-title { display:flex; align-items:center; min-width:0; }
+.wd-topbar-title .title-icon { margin-right:8px; flex:0 0 auto; }
+.wd-topbar-title h1 { font-size:20px; color:var(--brand-700); margin:0;
+  letter-spacing:.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wd-topbar .wd-user-badge { flex:0 0 auto; }
+@media (max-width:720px) {
+  .wd-topbar { flex-wrap:wrap; padding:8px 14px; }
+  .wd-topbar-title h1 { font-size:16px; white-space:normal; }
+}
+
 /* ── 卡片 ─────────────────────────────────────────── */
 .wd-card {
   background:var(--bg-card); border:1px solid var(--border); border-radius:8px;
@@ -251,6 +269,16 @@ table.wd-table td.wd-num { font-variant-numeric:tabular-nums; text-align:right; 
 .wd-status.wd-status-error   { border-left-color:var(--danger);  background:var(--danger-bg);  color:var(--danger-deep); }
 .wd-status.wd-status-warn    { border-left-color:var(--warn);    background:var(--warn-bg);    color:var(--warn-deep); }
 
+/* ── 等待动效：分析进行中状态条的旋转 spinner ── */
+.wd-working { display:flex; align-items:center; gap:10px; }
+.wd-spinner { flex:0 0 auto; width:16px; height:16px; border-radius:50%;
+  border:2.5px solid var(--brand-100); border-top-color:var(--brand-500);
+  animation:wd-spin .8s linear infinite; }
+@keyframes wd-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .wd-spinner { animation-duration:2.4s; }
+}
+
 /* ── 图表卡 ────────────────────────────────────────── */
 .wd-chart-card { flex:1; min-width:240px; background:var(--bg-card);
   border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow-1); padding:10px; }
@@ -365,7 +393,7 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
   opacity:0; pointer-events:none;
   transition:opacity var(--duration-normal) var(--ease-standard); }
 .wd-settings-mask.wd-open { opacity:1; pointer-events:auto; }
-.wd-settings-popover { position:fixed; top:60px; right:16px; z-index:9991;
+.wd-settings-popover { position:fixed; top:56px; right:16px; z-index:9991;
   width:min(320px,92vw); background:var(--bg-card); border:1px solid var(--border);
   border-radius:10px; box-shadow:var(--shadow-2); padding:14px 16px;
   opacity:0; transform:translateY(-6px); pointer-events:none;
@@ -524,6 +552,12 @@ def tone_for_value(value: str) -> str:
 def status_banner(text: str, kind: str = "info") -> str:
     """状态条。kind: info / success / error / warn"""
     return f'<div class="wd-status wd-status-{esc(kind)}">{text}</div>'
+
+
+def working_banner(text: str) -> str:
+    """等待动效状态条：旋转 spinner + 文案（分析进行中时显示）。"""
+    return ('<div class="wd-status wd-status-info wd-working">'
+            f'<span class="wd-spinner" aria-hidden="true"></span>{text}</div>')
 
 
 def empty_state(title: str, desc: str = "", icon_svg: str = "") -> str:

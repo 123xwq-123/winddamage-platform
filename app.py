@@ -179,20 +179,31 @@ def get_risk_badge_values():
 # ══════════════════════════════════════════════════════════
 
 def analyze_single(image, request: gr.Request = None):
-    """单图分析，返回 (summary, detail_html, json_out, status, img_info, md_path, json_path)。"""
+    """单图分析（生成器）。
+
+    先立即 yield 一条带旋转 spinner 的"分析中"状态条（等待动效），
+    推理完成后再 yield 最终结果。返回值结构与之前一致：
+    (summary, detail_html, json_out, status, img_info, md_path, json_path)。
+    """
     if image is None:
-        return tr("msg_please_upload"), _empty_result_html(), "", tr("msg_upload_first"), "", None, None
+        yield (tr("msg_please_upload"), _empty_result_html(), "",
+               tr("msg_upload_first"), "", None, None)
+        return
 
     image_path = image if isinstance(image, str) else getattr(image, 'name', str(image))
 
     if not os.path.exists(image_path):
-        return (
+        yield (
             tr("msg_file_not_exist"),
             uc.status_banner(f'{uc.esc(tr("msg_file_not_exist"))}: {uc.esc(image_path)}', "error"),
             "", tr("msg_file_not_exist"), "", None, None,
         )
+        return
 
     img_info = get_image_info(image_path)
+
+    # 等待动效：立即给出"分析中"状态（spinner），清空旧结果避免误读
+    yield ("", uc.working_banner(tr("msg_working")), "", "", img_info, None, None)
 
     try:
         t0 = time.time()
@@ -200,12 +211,13 @@ def analyze_single(image, request: gr.Request = None):
         total_time = time.time() - t0
 
         if parsed is None:
-            return (
+            yield (
                 tr("msg_parse_fail"),
                 uc.status_banner(tr("msg_infer_parse_fail", t=infer_time), "error")
                 + f"<pre style='overflow-x:auto;background:#F0F3F7;padding:12px;border-radius:8px;font-size:12px;'>{uc.esc(raw[:2000])}</pre>",
                 raw, tr("msg_infer_parse_fail", t=infer_time), img_info, None, None,
             )
+            return
 
         # 保存历史记录（先拿到记录 ID，用于摘要卡报告编号；归属当前登录用户）
         owner_id, created_by = _scope_owner(request)
@@ -231,12 +243,12 @@ def analyze_single(image, request: gr.Request = None):
         md_path = save_export(parsed, image_name, infer_time, fmt="md")
         json_path = save_export(parsed, image_name, infer_time, fmt="json")
 
-        return summary, detail_html, json_str, status, img_info, md_path, json_path
+        yield summary, detail_html, json_str, status, img_info, md_path, json_path
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return (
+        yield (
             tr("msg_infer_fail"),
             uc.status_banner(f'{uc.esc(tr("msg_error", e=e))}', "error")
             + f"<pre style='overflow-x:auto;background:#F0F3F7;padding:12px;border-radius:8px;font-size:12px;'>{uc.esc(traceback.format_exc()[:1500])}</pre>",
@@ -305,15 +317,15 @@ def analyze_batch(files, request: gr.Request = None):
                 f'（{ok_count + fail_count}/{total}）</span></summary>'
                 f'<div class="wd-sec-body">{table}</div></details>')
 
-    banner0 = uc.status_banner(tr("msg_progress", i=0, total=total, name="…"), "info")
+    banner0 = uc.working_banner(tr("msg_progress", i=0, total=total, name="…"))
     yield "", "", _batch_progress_html(banner0, status_parts)
 
     for i, f in enumerate(files):
         image_path = f if isinstance(f, str) else f.name
         image_name = os.path.basename(image_path)
 
-        banner = uc.status_banner(
-            tr("msg_progress", i=i + 1, total=total, name=uc.esc(image_name)), "info")
+        banner = uc.working_banner(
+            tr("msg_progress", i=i + 1, total=total, name=uc.esc(image_name)))
         yield "", render_table(), _batch_progress_html(banner, status_parts)
 
         try:
@@ -1073,15 +1085,13 @@ def build_ui():
                 .replace("__LOGOUT_LINK__", tr("btn_logout"))
                 .replace("__SETTINGS_LINK__", tr("settings_link")))
     with gr.Blocks(title=tr("app_title")) as app:
-        # 顶栏用户徽章（内容由上面的 JS 注入）
-        gr.HTML('<div id="wd-user-badge" class="wd-user-badge"></div>')
-        # 显示设置弹层（右上角"设置"打开；深浅模式 + 字号缩放，localStorage 持久化）
-        gr.HTML(_settings_popover_html())
-        # 标题（含 SVG 风电机组图标）
-        gr.Markdown(
-            "<div class='main-title'>"
-            "<h1><span class='title-icon'>"
-            "<svg width='38' height='38' viewBox='0 0 64 64' xmlns='http://www.w3.org/2000/svg'>"
+        # ── 吸顶导航栏：标题（左） + 用户徽章（右），滚动时常驻顶部 ──
+        # 徽章内容由 _BADGE_JS 注入（沿用 #wd-user-badge id）。
+        gr.HTML(
+            "<div class='wd-topbar'>"
+            "<div class='wd-topbar-title'>"
+            "<span class='title-icon'>"
+            "<svg width='30' height='30' viewBox='0 0 64 64' xmlns='http://www.w3.org/2000/svg'>"
             "<circle cx='32' cy='32' r='30' fill='#EBF5FB' stroke='#125191' stroke-width='1.5'/>"
             "<rect x='29.5' y='36' width='5' height='22' fill='#7F8C8D'/>"
             "<rect x='23' y='30' width='18' height='8' rx='2' fill='#5DADE2'/>"
@@ -1091,9 +1101,14 @@ def build_ui():
             "<path d='M32 28 L14 18 A5 5 0 0 1 10 12 L20 9 Z'/>"
             "<path d='M32 28 L42 42 A5 5 0 0 1 41 48 L32 44 Z'/>"
             "</g>"
-            "</svg></span>" + tr("app_title") + "</h1>"
+            "</svg></span>"
+            "<h1>" + tr("app_title") + "</h1>"
+            "</div>"
+            "<div id='wd-user-badge' class='wd-user-badge'></div>"
             "</div>"
         )
+        # 显示设置弹层（右上角"设置"打开；深浅模式 + 字号缩放，localStorage 持久化）
+        gr.HTML(_settings_popover_html())
 
         with gr.Tabs():
             # ─── Tab 1: 单图检测 ────────────────────────────
@@ -1124,7 +1139,8 @@ def build_ui():
                         if examples:
                             gr.Examples(examples=examples, inputs=img_input, label=tr("examples_label") % len(examples))
 
-                        status_text = gr.Textbox(label=tr("status_label"), interactive=False)
+                        # 检测状态：HTML 状态条（支持等待动效 spinner / 彩色结果条）
+                        status_text = gr.HTML(value="")
 
                         with gr.Row():
                             btn_export_md = gr.Button(tr("btn_export_md"))
