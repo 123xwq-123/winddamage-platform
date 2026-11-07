@@ -45,15 +45,21 @@ BASE_CSS = """
   --bg-photo: url("/assets/bg_photo.jpg");
   --font-stack: "Times New Roman", "SimSun", "宋体", "NSimSun", serif;
 }
-body, .gradio-container {
-  background: var(--bg-page) !important;
+html {
+  background: var(--bg-page) !important; /* 兜底纯色，图片未加载时也不影响可读 */
 }
-/* 照片背景用固定定位的伪元素承载：
-   - 位置固定但只合成一次，滚动/交互零重绘（避免 background-attachment:fixed 的全页重绘卡顿）；
+body {
+  background: transparent !important; /* 必须透明，否则会盖住 z-index:-1 的照片层 */
+}
+/* 照片背景用 z-index:-1 的固定定位伪元素承载：
+   - 永远垫在所有内容之下（不依赖页面结构里有没有 .gradio-container，
+     登录页等 FastAPI 直渲染页面同样安全）；
+   - 位置固定但只合成一次，滚动/交互零重绘（避免 background-attachment:fixed
+     的全页重绘卡顿）；
    - 上覆由深到浅的页面色渐变蒙版（"加透明"），顶部保证内容可读，底部露出风机照片。 */
 body::before {
   content: "";
-  position: fixed; inset: 0; z-index: 0;
+  position: fixed; inset: 0; z-index: -1;
   pointer-events: none;
   background:
     linear-gradient(180deg,
@@ -62,7 +68,6 @@ body::before {
       rgba(245,247,250,.52) 100%),
     var(--bg-photo) center / cover no-repeat;
 }
-.gradio-container { position: relative; z-index: 1; }
 .gradio-container, .gradio-container button, .gradio-container input,
 .gradio-container textarea, .gradio-container select,
 .gradio-container .prose, body, body button, body input, body select, body textarea {
