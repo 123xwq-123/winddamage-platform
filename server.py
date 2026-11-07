@@ -343,6 +343,17 @@ def create_app():
 
     fastapp = FastAPI(title=tr("app_title"), docs_url=None, redoc_url=None)
 
+    async def _finish(request: Request, call_next):
+        """统一补缓存头：HTML 页面禁缓存（防止浏览器拿旧样式渲染新页面导致白屏），
+        /assets 静态图片允许 1 小时缓存。"""
+        response = await call_next(request)
+        ctype = response.headers.get("content-type", "")
+        if ctype.startswith("text/html"):
+            response.headers["Cache-Control"] = "no-store"
+        elif request.url.path.startswith("/assets/"):
+            response.headers.setdefault("Cache-Control", "public, max-age=3600")
+        return response
+
     # ─── 中间件：会话守卫 + Origin 校验 ─────────────────────
     @fastapp.middleware("http")
     async def auth_guard(request: Request, call_next):
@@ -366,7 +377,7 @@ def create_app():
         if auth.count_users() == 0:
             if path == "/setup" or path.startswith("/assets/") or \
                     path.startswith("/gradio_api/theme.css") or path == "/favicon.ico":
-                return await call_next(request)
+                return await _finish(request, call_next)
             if path.startswith("/gradio_api/"):
                 return JSONResponse({"detail": "setup required"}, status_code=401)
             return RedirectResponse("/setup", status_code=302)
@@ -383,7 +394,7 @@ def create_app():
             # admin-only 页面
             if path == "/users" and user["role"] != "admin":
                 return _error_page(tr("auth_need_admin"), 403)
-            return await call_next(request)
+            return await _finish(request, call_next)
 
         # 未登录：
         if path.startswith("/gradio_api/"):
@@ -399,7 +410,7 @@ def create_app():
             else:
                 next_url = "/login"
             return RedirectResponse(next_url, status_code=302)
-        return await call_next(request)
+        return await _finish(request, call_next)
 
     # ─── 登录 ──────────────────────────────────────────────
     @fastapp.get("/login")
