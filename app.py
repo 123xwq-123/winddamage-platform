@@ -855,12 +855,18 @@ def delete_export_task(task_id_str, request: gr.Request = None):
 #  Gradio 界面
 # ══════════════════════════════════════════════════════════
 
-# 顶栏用户徽章：页面加载后从 /api/me 拉取当前会话用户（server.py 提供）
+# 顶栏用户徽章：页面加载后从 /api/me 拉取当前会话用户（server.py 提供）。
+# ⚠ 不能写成"fetch 一次然后 getElementById"：Gradio 的自定义 js 在 SPA 引导早期
+#   注入执行，fetch 回调常常先于 #wd-user-badge 渲染完成 —— el 为 null 直接
+#   return，徽章（用户管理/修改密码/退出登录入口）就永远空白（线上实拍复现）。
+#   必须带重试：等元素出现再填，填上即停。
 _BADGE_JS = """
 () => {
-  fetch('/api/me').then(r => r.ok ? r.json() : null).then(u => {
+  let done = false;
+  let tries = 0;
+  const fill = (u) => {
     const el = document.getElementById('wd-user-badge');
-    if (!el || !u || !u.username) return;
+    if (!el) return false;
     const role = u.role === 'admin' ? '__ROLE_ADMIN__' : '__ROLE_USER__';
     el.innerHTML =
       '<span class="wd-ub-name" title="' + u.username + '">' + u.username + '</span>'
@@ -868,6 +874,16 @@ _BADGE_JS = """
       + (u.role === 'admin' ? '<a href="/users">__USERS_LINK__</a>' : '')
       + '<a href="/change-password">__PW_LINK__</a>'
       + '<a href="/logout">__LOGOUT_LINK__</a>';
+    return true;
+  };
+  fetch('/api/me').then(r => r.ok ? r.json() : null).then(u => {
+    if (!u || !u.username) return;
+    if (fill(u)) { done = true; return; }
+    const t = setInterval(() => {
+      tries += 1;
+      if (fill(u)) { clearInterval(t); done = true; }
+      else if (tries > 100) { clearInterval(t); }
+    }, 100);
   }).catch(() => {});
 }
 """
@@ -1266,8 +1282,14 @@ def build_ui():
 
     # gradio 6：js 参数在 launch()/mount_gradio_app() 上传入
     # （页面加载后注入用户徽章 + 抽屉快捷预览的事件委托）
+    # ⚠ gradio 6.26 对 js 参数的实现是把它原样塞进 <script> 标签：
+    #   e.textContent = config.js; document.head.appendChild(script)
+    #   <script>() => {...}</script> 是一条"函数表达式语句"，永远不会被调用。
+    #   旧写法 (badge_js) 为 "() => {...}"、07fcf9e 改成 "() => { a(); b(); }"
+    #   都因此从未执行过 → 顶栏用户徽章（用户管理/修改密码/退出登录）一直为空。
+    #   修复：包一层 IIFE 立即自调用。
     drawer_js = _DRAWER_JS
-    app._wd_badge_js = f"() => {{ ({badge_js})(); ({drawer_js})(); }}"
+    app._wd_badge_js = f"(() => {{ ({badge_js})(); ({drawer_js})(); }})();"
     return app
 
 

@@ -101,8 +101,9 @@ body::before {
 }
 .gradio-container.gradio-container-6-26-0 { font-size: var(--text-md) !important; }
 
-/* ── 隐藏 Gradio 自带页脚（API/品牌/设置入口，避免误触）── */
-.gradio-container footer, .gradio-container .footer { display: none !important; }
+/* 注意：不隐藏 Gradio 自带页脚（Use via API / 设置等入口）。
+   旧写法因 css= 前缀化而从未生效；样式注入修复后若加此规则会把
+   页脚入口一起藏掉，故明确不加（2026-02 反馈）。 */
 
 /* ── 下拉选择框：字号随框宽自适应 + 更顺滑的展开/悬停 ──
    注意：不加自定义展开动画/悬停过渡——与 Gradio 自带弹出动画叠加会导致卡顿，
