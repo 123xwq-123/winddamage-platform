@@ -40,14 +40,29 @@ BASE_CSS = """
   --ease-standard:cubic-bezier(.2,0,0,1);
 }
 
-/* ── 页面基调（风机场景背景 + 宋体/Times New Roman 字体）── */
+/* ── 页面基调（真实风机照片背景 + 宋体/Times New Roman 字体）── */
 :root {
-  --bg-scene: url("/assets/bg_scene.svg");
+  --bg-photo: url("/assets/bg_photo.jpg");
   --font-stack: "Times New Roman", "SimSun", "宋体", "NSimSun", serif;
 }
 body, .gradio-container {
-  background: var(--bg-page) var(--bg-scene) no-repeat fixed bottom center / 100% auto !important;
+  background: var(--bg-page) !important;
 }
+/* 照片背景用固定定位的伪元素承载：
+   - 位置固定但只合成一次，滚动/交互零重绘（避免 background-attachment:fixed 的全页重绘卡顿）；
+   - 上覆由深到浅的页面色渐变蒙版（"加透明"），顶部保证内容可读，底部露出风机照片。 */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg,
+      rgba(245,247,250,.94) 0%,
+      rgba(245,247,250,.80) 55%,
+      rgba(245,247,250,.52) 100%),
+    var(--bg-photo) center / cover no-repeat;
+}
+.gradio-container { position: relative; z-index: 1; }
 .gradio-container, .gradio-container button, .gradio-container input,
 .gradio-container textarea, .gradio-container select,
 .gradio-container .prose, body, body button, body input, body select, body textarea {
@@ -58,25 +73,20 @@ body, .gradio-container {
 /* ── 隐藏 Gradio 自带页脚（API/品牌/设置入口，避免误触）── */
 .gradio-container footer, .gradio-container .footer { display: none !important; }
 
-/* ── 下拉选择框：字号随框宽自适应 + 更顺滑的展开/悬停 ── */
+/* ── 下拉选择框：字号随框宽自适应 + 更顺滑的展开/悬停 ──
+   注意：不加自定义展开动画/悬停过渡——与 Gradio 自带弹出动画叠加会导致卡顿，
+   悬停高亮即时生效（无过渡）反而手感更跟手。 */
 .gradio-container .dropdown input,
 .gradio-container .dropdown button,
-.gradio-container .wrap.default.dropdown,
 .gradio-container ul.options,
 .gradio-container ul.options li {
   font-size: clamp(13px, 0.35vw + 11.5px, 15px) !important;
 }
 .gradio-container ul.options {
   max-height: 300px; overflow-y: auto;
-  animation: wd-dd-in var(--duration-fast) var(--ease-standard);
-}
-@keyframes wd-dd-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: none; }
 }
 .gradio-container ul.options li {
   padding: 8px 12px; cursor: pointer; user-select: none;
-  transition: background 100ms linear;
 }
 .gradio-container ul.options li:hover,
 .gradio-container ul.options li.selected { background: var(--brand-100); }
