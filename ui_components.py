@@ -131,24 +131,6 @@ body::before {
 .title-icon { display:inline-flex; vertical-align:-7px; margin-right:8px; }
 .footer-note { text-align:center; color:var(--text-3); font-size:12px; padding:12px 0 4px; margin-top:10px; }
 
-/* ── 吸顶导航栏：标题（左） + 用户徽章（右），滚动时常驻顶部 ──
-   半透明底 + 毛玻璃模糊，压过照片背景保证可读；z-index 低于
-   抽屉(9998/9999)与设置弹层(9990/9991)，避免盖住浮层。 */
-.wd-topbar { position:sticky; top:0; z-index:900;
-  display:flex; align-items:center; justify-content:space-between; gap:16px;
-  padding:9px 22px; background:rgba(255,255,255,.86);
-  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
-  border-bottom:1px solid var(--border); box-shadow:var(--shadow-1); }
-.wd-topbar-title { display:flex; align-items:center; min-width:0; }
-.wd-topbar-title .title-icon { margin-right:8px; flex:0 0 auto; }
-.wd-topbar-title h1 { font-size:20px; color:var(--brand-700); margin:0;
-  letter-spacing:.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.wd-topbar .wd-user-badge { flex:0 0 auto; }
-@media (max-width:720px) {
-  .wd-topbar { flex-wrap:wrap; padding:8px 14px; }
-  .wd-topbar-title h1 { font-size:16px; white-space:normal; }
-}
-
 /* ── 卡片 ─────────────────────────────────────────── */
 .wd-card {
   background:var(--bg-card); border:1px solid var(--border); border-radius:8px;
@@ -467,6 +449,18 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
 .wd-pw-rules li::before { content:"○ "; }
 .wd-pw-rules li.wd-rule-ok { color:#1E8449; }
 .wd-pw-rules li.wd-rule-ok::before { content:"● "; }
+
+/* ── 密码强度实时提示条（F5）：宽度=得分比例，颜色随 弱/中/强 变化 ── */
+.wd-pw-meter { display:flex; align-items:center; gap:8px; margin-top:8px; }
+.wd-pw-meter-bar { flex:1; height:6px; border-radius:3px;
+  background:var(--table-head); overflow:hidden; }
+.wd-pw-meter-bar span { display:block; height:100%; width:0; border-radius:3px;
+  background:var(--danger);
+  transition:width var(--duration-normal) var(--ease-standard),
+             background var(--duration-normal) var(--ease-standard); }
+.wd-pw-meter.wd-pw-medium .wd-pw-meter-bar span { background:var(--warn); }
+.wd-pw-meter.wd-pw-strong .wd-pw-meter-bar span { background:var(--success); }
+.wd-pw-meter-label { font-size:12px; color:var(--text-2); min-width:2em; text-align:right; }
 .wd-auth-alt { margin-top:16px; padding-top:14px; border-top:1px solid var(--border);
   font-size:13px; color:var(--text-3); }
 .wd-auth-alt a { color:var(--brand-500); font-weight:600; text-decoration:none; }
@@ -520,6 +514,16 @@ def esc(text) -> str:
     return _html.escape(str(text), quote=True)
 
 
+def esc_js(text) -> str:
+    """JS 字符串字面量转义：内容已 HTML 转义后再包一层单引号安全。
+    用于 onsubmit="return confirm('...')" 这类内联属性——属性本身由
+    esc() 级别的引号包裹，内部只需保证不提前闭合 JS 引号。"""
+    s = str(text).replace("\\", "\\\\").replace("'", "\\'")
+    s = s.replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+    s = s.replace("\r", "").replace("\n", " ")
+    return f"'{s}'"
+
+
 def risk_badge(value: str, tone: str = "") -> str:
     """风险徽章：胶囊形，浅色语义底 + 深色文字（文字+颜色双通道）。
 
@@ -555,9 +559,15 @@ def status_banner(text: str, kind: str = "info") -> str:
 
 
 def working_banner(text: str) -> str:
-    """等待动效状态条：旋转 spinner + 文案（分析进行中时显示）。"""
+    """等待动效状态条：旋转 spinner + 文案 + 实时已用时计时。
+
+    .wd-elapsed 的秒数由前端每秒心跳脚本刷新（见 app._BADGE_JS 组合脚本），
+    首次心跳时写入 data-start 起点。"""
+    unit = i18n.t("elapsed_sec_unit")
     return ('<div class="wd-status wd-status-info wd-working">'
-            f'<span class="wd-spinner" aria-hidden="true"></span>{text}</div>')
+            '<span class="wd-spinner" aria-hidden="true"></span>'
+            f'{text}<span class="wd-elapsed-wrap">&nbsp;（{i18n.t("elapsed_prefix")} '
+            f'<span class="wd-elapsed">0</span> {unit}）</span></div>')
 
 
 def empty_state(title: str, desc: str = "", icon_svg: str = "") -> str:

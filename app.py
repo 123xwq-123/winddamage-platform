@@ -883,15 +883,23 @@ def retry_export_task(task_id_str, request: gr.Request = None):
 
 
 def delete_export_task(task_id_str, request: gr.Request = None):
-    """删除任务记录（user 仅限本人任务）。"""
+    """删除任务记录（user 仅限本人任务）。返回 (状态, 任务列表, 下拉更新, 确认行隐藏)。"""
     user_id, is_admin = _resolve_request_scope(request)
     if not task_id_str or not str(task_id_str).strip().isdigit():
-        return tr("msg_task_need_select"), "", gr.update()
+        return tr("msg_task_need_select"), "", gr.update(), gr.update(visible=False)
     tid = int(str(task_id_str).strip())
     if not xt.delete_task(tid, user_id, is_admin):
-        return tr("msg_task_forbidden"), "", gr.update()
+        return tr("msg_task_forbidden"), "", gr.update(), gr.update(visible=False)
     tasks = xt.list_tasks(None if is_admin else user_id)
-    return tr("msg_task_deleted"), _tasks_list_html(tasks), _task_dd_update(tasks)
+    return tr("msg_task_deleted"), _tasks_list_html(tasks), _task_dd_update(tasks), gr.update(visible=False)
+
+
+def show_delete_task_confirm(task_id_str):
+    """删除任务两步确认第一步：显示确认行（F4，与历史删除同模式）。"""
+    if not task_id_str or not str(task_id_str).strip().isdigit():
+        return tr("msg_task_need_select"), gr.update(visible=False)
+    return (f"⚠️ {tr('task_delete_confirm', id=str(task_id_str).strip())}",
+            gr.update(visible=True))
 
 
 # ══════════════════════════════════════════════════════════
@@ -936,6 +944,29 @@ _BADGE_JS = """
       else if (tries > 100) { clearInterval(t); }
     }, 100);
   }).catch(() => {});
+
+  // 等待动效的实时已用时计时：每秒刷新页面上所有 .wd-elapsed（working_banner）。
+  // 首次见到某元素时写入 data-start 作为计时起点；元素随生成器换页被重建，
+  // data-start 不存在则重新起点，天然支持多次分析。
+  if (!window.__wdElapsedTimer) {
+    window.__wdElapsedTimer = setInterval(() => {
+      const els = document.querySelectorAll('.wd-elapsed');
+      for (let i = 0; i < els.length; i++) {
+        const el = els[i];
+        let st = Number(el.getAttribute('data-start'));
+        if (!st) { el.setAttribute('data-start', String(Date.now())); continue; }
+        el.textContent = Math.floor((Date.now() - st) / 1000);
+      }
+      // F3 日期控件：历史筛选的两个文本框升级为原生 date 控件。
+      // Gradio 更新值时可能重建输入框，放进每秒心跳里兜底重升级。
+      ['wd-date-from', 'wd-date-to'].forEach((id) => {
+        const w = document.getElementById(id);
+        if (!w) return;
+        const inp = w.querySelector('input');
+        if (inp && inp.type !== 'date') inp.type = 'date';
+      });
+    }, 1000);
+  }
 }
 """
 
@@ -1085,13 +1116,15 @@ def build_ui():
                 .replace("__LOGOUT_LINK__", tr("btn_logout"))
                 .replace("__SETTINGS_LINK__", tr("settings_link")))
     with gr.Blocks(title=tr("app_title")) as app:
-        # ── 吸顶导航栏：标题（左） + 用户徽章（右），滚动时常驻顶部 ──
-        # 徽章内容由 _BADGE_JS 注入（沿用 #wd-user-badge id）。
-        gr.HTML(
-            "<div class='wd-topbar'>"
-            "<div class='wd-topbar-title'>"
-            "<span class='title-icon'>"
-            "<svg width='30' height='30' viewBox='0 0 64 64' xmlns='http://www.w3.org/2000/svg'>"
+        # 顶栏用户徽章（内容由 _BADGE_JS 注入）
+        gr.HTML('<div id="wd-user-badge" class="wd-user-badge"></div>')
+        # 显示设置弹层（右上角"设置"打开；深浅模式 + 字号缩放，localStorage 持久化）
+        gr.HTML(_settings_popover_html())
+        # 标题（含 SVG 风电机组图标，居中）
+        gr.Markdown(
+            "<div class='main-title'>"
+            "<h1><span class='title-icon'>"
+            "<svg width='38' height='38' viewBox='0 0 64 64' xmlns='http://www.w3.org/2000/svg'>"
             "<circle cx='32' cy='32' r='30' fill='#EBF5FB' stroke='#125191' stroke-width='1.5'/>"
             "<rect x='29.5' y='36' width='5' height='22' fill='#7F8C8D'/>"
             "<rect x='23' y='30' width='18' height='8' rx='2' fill='#5DADE2'/>"
@@ -1101,14 +1134,9 @@ def build_ui():
             "<path d='M32 28 L14 18 A5 5 0 0 1 10 12 L20 9 Z'/>"
             "<path d='M32 28 L42 42 A5 5 0 0 1 41 48 L32 44 Z'/>"
             "</g>"
-            "</svg></span>"
-            "<h1>" + tr("app_title") + "</h1>"
-            "</div>"
-            "<div id='wd-user-badge' class='wd-user-badge'></div>"
+            "</svg></span>" + tr("app_title") + "</h1>"
             "</div>"
         )
-        # 显示设置弹层（右上角"设置"打开；深浅模式 + 字号缩放，localStorage 持久化）
-        gr.HTML(_settings_popover_html())
 
         with gr.Tabs():
             # ─── Tab 1: 单图检测 ────────────────────────────
@@ -1199,10 +1227,14 @@ def build_ui():
                         label=tr("pagesize_label"),
                         choices=[("20", "20"), ("50", "50")], value="20", scale=1)
                 with gr.Row(equal_height=True):
+                    # 日期筛选：elem_id 供前端心跳脚本把文本框升级为原生
+                    # <input type="date"> 日期控件（F3），值格式不变（YYYY-MM-DD）
                     date_from_tb = gr.Textbox(label=tr("filter_date_from"),
-                                              placeholder=tr("date_ph"), scale=1)
+                                              placeholder=tr("date_ph"), scale=1,
+                                              elem_id="wd-date-from")
                     date_to_tb = gr.Textbox(label=tr("filter_date_to"),
-                                            placeholder=tr("date_ph"), scale=1)
+                                            placeholder=tr("date_ph"), scale=1,
+                                            elem_id="wd-date-to")
                     btn_quick_today = gr.Button(tr("quick_today"), size="sm")
                     btn_quick_7d = gr.Button(tr("quick_7d"), size="sm")
                     btn_quick_30d = gr.Button(tr("quick_30d"), size="sm")
@@ -1292,6 +1324,14 @@ def build_ui():
                         btn_task_retry = gr.Button(tr("btn_task_retry"), scale=1)
                         btn_task_delete = gr.Button(
                             tr("btn_task_delete"), elem_classes=["wd-btn-danger"], scale=1)
+                    # 删除任务两步确认（F4，与历史删除同模式）
+                    task_confirm_row = gr.Row(visible=False)
+                    with task_confirm_row:
+                        task_confirm_md = gr.HTML(value="")
+                        btn_task_del_confirm = gr.Button(
+                            tr("btn_delete_confirm"), variant="stop",
+                            elem_classes=["wd-btn-danger"])
+                        btn_task_del_cancel = gr.Button(tr("btn_delete_cancel"))
 
                 # 清空（分级删除最高档：输入确认文字 + 二次确认）
                 with gr.Accordion(tr("btn_clear_history"), open=False):
@@ -1473,10 +1513,20 @@ def build_ui():
             inputs=[task_dd],
             outputs=[export_status, tasks_list, task_dd],
         )
+        # 删除任务两步确认（F4）
         btn_task_delete.click(
+            fn=show_delete_task_confirm,
+            inputs=[task_dd],
+            outputs=[export_status, task_confirm_row],
+        )
+        btn_task_del_cancel.click(
+            fn=lambda: gr.update(visible=False),
+            inputs=[], outputs=[task_confirm_row],
+        )
+        btn_task_del_confirm.click(
             fn=delete_export_task,
             inputs=[task_dd],
-            outputs=[export_status, tasks_list, task_dd],
+            outputs=[export_status, tasks_list, task_dd, task_confirm_row],
         )
 
     # 页脚 — 放在 Tabs 外层，全宽居中

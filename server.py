@@ -93,18 +93,38 @@ def _password_rules_html() -> str:
     return f'<ul class="wd-pw-rules">{rules}</ul>'
 
 
+def _password_strength_html() -> str:
+    """密码强度实时提示条（F5）：0-3 分对应 弱/中/强，JS 随输入刷新。"""
+    return ('<div class="wd-pw-meter" aria-live="polite">'
+            '<div class="wd-pw-meter-bar"><span></span></div>'
+            '<span class="wd-pw-meter-label"></span></div>')
+
+
 _PW_RULES_JS = """
 (function () {
+  var LEVELS = ['wd-pw-weak', 'wd-pw-medium', 'wd-pw-strong'];
+  var LABELS = ['%(weak)s', '%(medium)s', '%(strong)s'];
   function bind(inputId, listSel) {
     var input = document.getElementById(inputId);
-    var list = document.querySelector(listSel);
-    if (!input || !list) return;
+    if (!input) return;
+    var list = listSel ? document.querySelector(listSel) : null;
+    var meter = input.parentNode.querySelector('.wd-pw-meter');
     input.addEventListener('input', function () {
       var v = input.value;
       var checks = [v.length >= 8, /[A-Za-z]/.test(v), /\\d/.test(v)];
-      var items = list.querySelectorAll('li');
-      for (var i = 0; i < items.length; i++) {
-        items[i].classList.toggle('wd-rule-ok', checks[i]);
+      if (list) {
+        var items = list.querySelectorAll('li');
+        for (var i = 0; i < items.length; i++) {
+          items[i].classList.toggle('wd-rule-ok', checks[i]);
+        }
+      }
+      if (meter) {
+        var score = checks.filter(Boolean).length;
+        var level = score <= 1 ? 0 : (score === 2 ? 1 : 2);
+        meter.className = 'wd-pw-meter ' + (v ? LEVELS[level] : '');
+        meter.querySelector('.wd-pw-meter-bar span').style.width =
+          v ? Math.round(score / 3 * 100) + '%%' : '0';
+        meter.querySelector('.wd-pw-meter-label').textContent = v ? LABELS[level] : '';
       }
     });
   }
@@ -123,7 +143,10 @@ _PW_RULES_JS = """
 
 
 def _register_page(error: str = "", banner: str = "", username: str = ""):
-    js = _PW_RULES_JS % {"mismatch": tr("auth_pw_mismatch")}
+    js = _PW_RULES_JS % {"mismatch": tr("auth_pw_mismatch"),
+                                "weak": tr("pw_strength_weak"),
+                                "medium": tr("pw_strength_medium"),
+                                "strong": tr("pw_strength_strong")}
     body = f"""
 <div class="wd-auth-wrap">
   <div class="wd-auth-card">
@@ -143,6 +166,7 @@ def _register_page(error: str = "", banner: str = "", username: str = ""):
         <input type="password" id="wd-reg-pw" name="password" required
                autocomplete="new-password"/>
         {_password_rules_html()}
+        {_password_strength_html()}
       </div>
       <div class="wd-field">
         <label>{uc.esc(tr("register_password2"))}</label>
@@ -179,6 +203,7 @@ def _setup_page(error: str = "", username: str = ""):
         <input type="password" id="wd-reg-pw" name="password" required
                autocomplete="new-password"/>
         {_password_rules_html()}
+        {_password_strength_html()}
       </div>
       <div class="wd-field">
         <label>{uc.esc(tr("register_password2"))}</label>
@@ -190,7 +215,10 @@ def _setup_page(error: str = "", username: str = ""):
     </form>
   </div>
 </div>
-<script>{_PW_RULES_JS % {"mismatch": tr("auth_pw_mismatch")}}</script>"""
+<script>{_PW_RULES_JS % {"mismatch": tr("auth_pw_mismatch"),
+                                "weak": tr("pw_strength_weak"),
+                                "medium": tr("pw_strength_medium"),
+                                "strong": tr("pw_strength_strong")}}</script>"""
     return _auth_page(tr("setup_title"), body)
 
 
@@ -208,6 +236,7 @@ def _change_pw_page(error: str = "", banner: str = ""):
         <input type="password" id="wd-reg-pw" name="new_password" required
                autocomplete="new-password"/>
         {_password_rules_html()}
+        {_password_strength_html()}
       </div>
       <div class="wd-field">
         <label>{uc.esc(tr("pw_label_confirm"))}</label>
@@ -220,7 +249,10 @@ def _change_pw_page(error: str = "", banner: str = ""):
     <div class="wd-auth-alt"><a href="/">← {uc.esc(tr("app_title"))}</a></div>
   </div>
 </div>
-<script>{_PW_RULES_JS % {"mismatch": tr("auth_pw_mismatch")}}</script>"""
+<script>{_PW_RULES_JS % {"mismatch": tr("auth_pw_mismatch"),
+                                "weak": tr("pw_strength_weak"),
+                                "medium": tr("pw_strength_medium"),
+                                "strong": tr("pw_strength_strong")}}</script>"""
     return _auth_page(tr("change_pw_title"), body)
 
 
@@ -242,10 +274,12 @@ def _users_page(me: dict, banner: str = ""):
 
         actions = []
         is_self = u["id"] == me["id"]
-        # 停用/启用（不能操作自己）
+        # 停用/启用（不能操作自己）；危险操作带 confirm 二次确认（F4）
         if not is_self:
             if u["is_active"]:
-                actions.append(_user_action(u["id"], "disable", tr("users_btn_disable"), danger=True))
+                actions.append(_user_action(
+                    u["id"], "disable", tr("users_btn_disable"), danger=True,
+                    confirm=tr("users_confirm_disable", name=u["username"])))
             else:
                 actions.append(_user_action(u["id"], "enable", tr("users_btn_enable")))
         if u["locked_until"]:
@@ -255,11 +289,15 @@ def _users_page(me: dict, banner: str = ""):
             new_role = "user" if u["role"] == "admin" else "admin"
             actions.append(_user_action(u["id"], "role", tr("users_btn_role", role=(
                 tr("users_role_user") if new_role == "user" else tr("users_role_admin"))),
-                extra=f'<input type="hidden" name="role" value="{new_role}"/>'))
+                extra=f'<input type="hidden" name="role" value="{new_role}"/>',
+                confirm=tr("users_confirm_role", name=u["username"],
+                           role=(tr("users_role_user") if new_role == "user"
+                                 else tr("users_role_admin")))))
         # 重置密码（不能重置自己——自己走 /change-password）
         if not is_self:
             actions.append(
-                f'<form method="post" action="/users/action">'
+                f'<form method="post" action="/users/action" '
+                f'onsubmit="return confirm({uc.esc_js(tr("users_confirm_resetpw", name=u["username"]))})">'
                 f'<input type="hidden" name="action" value="resetpw"/>'
                 f'<input type="hidden" name="user_id" value="{u["id"]}"/>'
                 f'<input type="password" name="new_password" required '
@@ -304,9 +342,10 @@ def _users_page(me: dict, banner: str = ""):
 
 
 def _user_action(user_id: int, action: str, label: str, danger: bool = False,
-                 extra: str = "") -> str:
+                 extra: str = "", confirm: str = "") -> str:
     cls = ' class="wd-u-danger"' if danger else ""
-    return (f'<form method="post" action="/users/action">'
+    onsubmit = (f' onsubmit="return confirm({uc.esc_js(confirm)})"' if confirm else "")
+    return (f'<form method="post" action="/users/action"{onsubmit}>'
             f'<input type="hidden" name="action" value="{action}"/>'
             f'<input type="hidden" name="user_id" value="{user_id}"/>{extra}'
             f'<button type="submit"{cls}>{uc.esc(label)}</button></form>')
