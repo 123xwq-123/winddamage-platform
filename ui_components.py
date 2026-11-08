@@ -127,7 +127,7 @@ body::before {
 .gradio-container ul.options li.selected { background: var(--brand-100); }
 
 .main-title { text-align:center; padding:14px 0 6px; }
-.main-title h1 { font-size:26px; color:var(--brand-700); margin-bottom:4px; letter-spacing:.5px; }
+.main-title h1 { font-size:32px; color:var(--brand-700); margin-bottom:4px; letter-spacing:.5px; }
 .title-icon { display:inline-flex; vertical-align:-7px; margin-right:8px; }
 .footer-note { text-align:center; color:var(--text-3); font-size:12px; padding:12px 0 4px; margin-top:10px; }
 
@@ -320,7 +320,7 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
 
 /* ── 响应式 ────────────────────────────────────────── */
 @media (max-width: 767px) {
-  .main-title h1 { font-size:20px; }
+  .main-title h1 { font-size:24px; }
   .wd-summary-grid { flex-direction:column; align-items:flex-start; }
   .wd-stat { min-width:calc(50% - 8px); }
 }
@@ -487,12 +487,14 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
 
 /* ── 顶栏用户徽章 ──────────────────────────────────── */
 .wd-user-badge { display:flex; gap:12px; align-items:center; justify-content:flex-end;
-  max-width:1280px; margin:0 auto; padding:8px 16px 0; font-size:13px; min-height:22px; }
+  max-width:1280px; margin:0 auto; padding:8px 16px 0; font-size:15px; min-height:24px; }
 .wd-user-badge:empty { display:none; }
 .wd-user-badge a { color:var(--brand-500); font-weight:600; text-decoration:none; }
 .wd-user-badge a:hover { text-decoration:underline; }
 .wd-user-badge .wd-ub-name { font-weight:600; color:var(--text-2);
   max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* 徽章行内的角色胶囊（管理员/普通用户）跟随放大，但仍比链接略小一档 */
+.wd-user-badge .wd-badge { font-size:14px; line-height:22px; }
 
 /* ── Gradio 页脚：设置按钮的宿主，视觉上隐藏但保留在 DOM ──
    右上角"设置"链接靠程序化点击页脚按钮打开设置面板（组件私有状态，
