@@ -27,7 +27,8 @@ SESSION_COOKIE = "wd_session"
 PBKDF2_ITERATIONS = 200_000
 SESSION_TTL_HOURS = int(os.environ.get("WD_SESSION_HOURS", "12"))
 LOCK_MINUTES = int(os.environ.get("WD_LOCK_MINUTES", "15"))
-MAX_FAILED_ATTEMPTS = 5
+# 登录失败锁定保护：0 = 关闭（默认）。需要时设 WD_MAX_FAILED_ATTEMPTS=5 重新启用。
+MAX_FAILED_ATTEMPTS = int(os.environ.get("WD_MAX_FAILED_ATTEMPTS", "0"))
 
 _TIME_FMT = "%Y-%m-%d %H:%M:%S"
 
@@ -183,7 +184,7 @@ def authenticate(username: str, password: str) -> Tuple[str, object]:
     """登录验证。返回 (status, payload)：
       ("ok", user_dict)
       ("failed", attempts_left)        — 凭据错误（含用户不存在，不区分）
-      ("locked", remaining_minutes)    — 账号锁定中
+      ("locked", remaining_minutes)    — 账号锁定中（仅 WD_MAX_FAILED_ATTEMPTS>0 时可能）
     """
     user = None
     conn = get_conn()
@@ -196,7 +197,7 @@ def authenticate(username: str, password: str) -> Tuple[str, object]:
             return "failed", MAX_FAILED_ATTEMPTS
         if row:
             user = dict(row)
-            if user["locked_until"]:
+            if user["locked_until"] and MAX_FAILED_ATTEMPTS > 0:
                 remain = _lock_remaining_minutes(user["locked_until"])
                 if remain > 0:
                     conn.close()
@@ -222,18 +223,27 @@ def authenticate(username: str, password: str) -> Tuple[str, object]:
         # 失败：已注册账号累计计数并可能触发锁定；未注册账号不暴露信息
         if user:
             failed = user["failed_count"] + 1
-            if failed >= MAX_FAILED_ATTEMPTS:
+            if MAX_FAILED_ATTEMPTS <= 0:
+                # 锁定保护关闭：不计数、顺带清掉历史遗留的锁定状态
                 conn.execute(
-                    """UPDATE users SET failed_count = 0, locked_until = ? WHERE id = ?""",
-                    (_lock_until(), user["id"]))
+                    "UPDATE users SET failed_count = 0, locked_until = NULL WHERE id = ?",
+                    (user["id"],))
                 conn.commit()
-                conn.close()
-                return "locked", LOCK_MINUTES
-            conn.execute(
-                "UPDATE users SET failed_count = ? WHERE id = ?",
-                (failed, user["id"]))
-            conn.commit()
+            else:
+                if failed >= MAX_FAILED_ATTEMPTS:
+                    conn.execute(
+                        """UPDATE users SET failed_count = 0, locked_until = ? WHERE id = ?""",
+                        (_lock_until(), user["id"]))
+                    conn.commit()
+                    conn.close()
+                    return "locked", LOCK_MINUTES
+                conn.execute(
+                    "UPDATE users SET failed_count = ? WHERE id = ?",
+                    (failed, user["id"]))
+                conn.commit()
         conn.close()
+        if MAX_FAILED_ATTEMPTS <= 0:
+            return "failed", 0
         return "failed", MAX_FAILED_ATTEMPTS - (user["failed_count"] + 1 if user else 0)
     finally:
         try:

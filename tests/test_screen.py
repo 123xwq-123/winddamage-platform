@@ -599,6 +599,23 @@ class TestScreenLoginV2(unittest.TestCase):
                   - _dt.datetime.now()).total_seconds()
         self.assertTrue(delta2 <= auth.SESSION_TTL_HOURS * 3600 + 5)
 
+    def test_lockout_disabled_by_default(self):
+        """连续错 7 次不再触发锁定（锁定保护默认关闭）。"""
+        with self._client() as c:
+            for _ in range(7):
+                r = c.post("/screen/login", data={
+                    "username": "v2login", "password": "wrong-pw"},
+                    follow_redirects=False)
+                self.assertEqual(r.status_code, 200)
+            u = auth.get_user(self.uid)
+            self.assertIsNone(u["locked_until"], "默认不应触发锁定")
+            self.assertEqual(u["failed_count"], 0)
+            # 正确密码照常登录
+            r = c.post("/screen/login", data={
+                "username": "v2login", "password": "Passw0rd1"},
+                follow_redirects=False)
+            self.assertEqual(r.status_code, 302)
+
     def test_login_page_v2_has_tabs_and_remember(self):
         import asyncio
         import screen_api

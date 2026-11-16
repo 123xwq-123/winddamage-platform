@@ -20,6 +20,7 @@ class TestAuth(unittest.TestCase):
 
     def tearDown(self):
         os.environ.pop("WD_DB_PATH", None)
+        self.auth.MAX_FAILED_ATTEMPTS = 0   # 恢复默认（锁定保护关闭）
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     # ─── 口令哈希 ─────────────────────────────────────
@@ -85,6 +86,7 @@ class TestAuth(unittest.TestCase):
         self.assertEqual(status2, "failed")
 
     def test_lockout_after_5_failures(self):
+        self.auth.MAX_FAILED_ATTEMPTS = 5   # 本测试显式启用锁定保护
         self.auth.create_user("locker02", "Passw0rd1")
         for i in range(4):
             status, payload = self.auth.authenticate("locker02", "WrongPass1")
@@ -103,6 +105,7 @@ class TestAuth(unittest.TestCase):
         self.assertEqual(status, "ok")
 
     def test_lockout_expiry_resets(self):
+        self.auth.MAX_FAILED_ATTEMPTS = 5   # 本测试显式启用锁定保护
         self.auth.create_user("locker03", "Passw0rd1")
         for _ in range(5):
             self.auth.authenticate("locker03", "WrongPass1")
