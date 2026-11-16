@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>检测大屏 · 智慧风电检测监管平台</title>
+<link rel="stylesheet" href="/screen-assets/screen.css">
+</head>
+<body class="sc-page">
+
+<div id="sc-scene"><iframe id="farm" src="/screen-assets/farm_viewer.html" title="3D风场"></iframe></div>
+
+<!-- 顶栏 -->
+<header class="sc-topbar">
+  <div class="sc-logo" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8">
+      <circle cx="12" cy="12" r="2.2" fill="#fff" stroke="none"/>
+      <path d="M12 9.8V3.2M14 13.2l5.6 3.2M10 13.2L4.4 16.4"/>
+    </svg>
+  </div>
+  <div class="sc-title">智慧风电检测监管平台<small>WIND POWER INSPECTION</small></div>
+  <div class="sc-top-right">
+    <div class="sc-clock"><b id="sc-clock-time">--:--:--</b><small id="sc-clock-date">----</small></div>
+    <div class="sc-user"><span class="sc-avatar" id="sc-avatar">·</span><span id="sc-username">…</span><small id="sc-role" style="color:#7E9CBE"></small></div>
+    <a class="sc-round-btn" href="/" title="返回旧版">⌂</a>
+    <a class="sc-round-btn" href="/logout" title="退出登录">⇥</a>
+  </div>
+</header>
+
+<!-- 左列 -->
+<aside class="sc-col sc-col-left">
+  <section class="sc-panel">
+    <div class="sc-ph"><span class="sq"></span><span class="cn">检测总览</span><span class="en">OVERVIEW</span></div>
+    <div class="sc-gauge-wrap">
+      <div class="sc-gauge">
+        <svg viewBox="0 0 120 120" width="120" height="120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(103,232,249,.14)" stroke-width="9"/>
+          <circle id="sc-gauge-arc" cx="60" cy="60" r="50" fill="none" stroke="#22D3EE" stroke-width="9"
+                  stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="314"
+                  transform="rotate(-90 60 60)" style="filter:drop-shadow(0 0 6px rgba(34,211,238,.7));transition:stroke-dashoffset .8s"/>
+        </svg>
+        <div class="val"><b id="sc-g-val">0%</b><span>完成度</span></div>
+      </div>
+      <div class="sc-kbars">
+        <div class="sc-krow"><div class="kt"><span>累计检测</span><b id="sc-k-total">0</b></div><div class="sc-kbar"><i id="sc-b-total"></i></div></div>
+        <div class="sc-krow"><div class="kt"><span>本周检测</span><b id="sc-k-week">0</b></div><div class="sc-kbar"><i id="sc-b-week"></i></div></div>
+        <div class="sc-krow"><div class="kt"><span>高风险</span><b id="sc-k-high">0</b></div><div class="sc-kbar"><i id="sc-b-high" style="background:linear-gradient(90deg,#9F1239,#F87171)"></i></div></div>
+        <div class="sc-krow"><div class="kt"><span>待复检</span><b id="sc-k-recheck">0</b></div><div class="sc-kbar"><i id="sc-b-recheck" style="background:linear-gradient(90deg,#92600A,#FBBF24)"></i></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sc-panel sc-upload-panel">
+    <div class="sc-ph"><span class="sq"></span><span class="cn">巡检图片上传</span><span class="en">UPLOAD</span></div>
+    <div class="sc-drop" id="sc-drop">
+      <div class="up">↑</div>
+      <div id="sc-drop-text">拖拽巡检图片到此处<br>或点击选择文件</div>
+      <div class="hint">支持 JPG / PNG，单张分析</div>
+      <input type="file" id="sc-file" accept="image/*" hidden>
+    </div>
+  </section>
+
+  <section class="sc-panel">
+    <div class="sc-ph"><span class="sq"></span><span class="cn">图片信息</span><span class="en">IMAGE INFO</span></div>
+    <div class="sc-info" id="sc-imginfo"><div class="sc-empty" style="grid-column:1/-1">等待上传图片…</div></div>
+  </section>
+</aside>
+
+<!-- 右列 -->
+<aside class="sc-col sc-col-right">
+  <section class="sc-panel">
+    <div class="sc-ph"><span class="sq"></span><span class="cn">检测报告</span><span class="en">REPORT</span></div>
+    <div class="sc-risk">
+      <div class="cell hi"><b id="sc-r-level">—</b><span>优先级</span></div>
+      <div class="cell mid"><b id="sc-r-type">—</b><span>损伤类型</span></div>
+      <div class="cell ok"><b id="sc-r-conf">—</b><span>置信度</span></div>
+    </div>
+    <div class="sc-kv" id="sc-report-kv">
+      <span class="k">构件</span><span class="v">—</span>
+      <span class="k">损伤位置</span><span class="v">—</span>
+      <span class="k">程度/尺寸</span><span class="v">—</span>
+      <span class="k">处置建议</span><span class="v">—</span>
+      <span class="k">模型</span><span class="v">—</span>
+      <span class="k">时间</span><span class="v">—</span>
+      <span class="k">报告编号</span><span class="v cyan">—</span>
+    </div>
+  </section>
+
+  <section class="sc-panel">
+    <div class="sc-ph"><span class="sq"></span><span class="cn">损伤定位</span><span class="en">LOCATE</span></div>
+    <div id="sc-loc"><div class="sc-empty">暂无损伤定位数据</div></div>
+  </section>
+
+  <section class="sc-panel">
+    <div class="sc-ph"><span class="sq"></span><span class="cn">历史快查</span><span class="en">RECENT</span></div>
+    <div id="sc-recent"><div class="sc-empty">暂无检测记录</div></div>
+  </section>
+</aside>
+
+<!-- 底部按钮 -->
+<div class="sc-btnbar">
+  <button class="sc-btn primary" id="sc-analyze" disabled>▶ 开始分析</button>
+  <button class="sc-btn" id="sc-clear">清 空</button>
+  <button class="sc-btn" id="sc-export" disabled>导出报告</button>
+  <a class="sc-btn" href="/screen/batch">批量检测</a>
+  <a class="sc-btn" href="/screen/history">历史记录</a>
+</div>
+
+<!-- 场景浮动标签 -->
+<div class="sc-tag" data-anchor="turbine">3# 风机 <small>WT-03</small></div>
+<div class="sc-tag" data-anchor="nacelle">机舱 <small id="sc-nac">NAC-03</small></div>
+<div class="sc-tag" data-anchor="substation">升压站 <small>SS-01</small></div>
+<div class="sc-tag red" id="sc-dmg-tag">损伤点 <small id="sc-dmg-txt"></small></div>
+<div class="sc-dmg" id="sc-dmg-dot"></div>
+
+<script src="/screen-assets/home.js"></script>
+</body>
+</html>

@@ -70,9 +70,10 @@ async def login_submit(request: Request):
 
 
 # ─── 页面（骨架占位；Task 4-7 逐页充实） ──────────────────────
-@router.get("/", response_class=HTMLResponse)
+@router.get("", response_class=HTMLResponse)
 async def home_page(request: Request):
-    return _page("<h1>screen home placeholder</h1>")
+    with open(os.path.join(SCREEN_DIR, "home.html"), encoding="utf-8") as f:
+        return _page(f.read())
 
 
 @router.get("/batch", response_class=HTMLResponse)
@@ -91,6 +92,15 @@ async def account_page(request: Request):
 
 
 # ─── JSON API ─────────────────────────────────────────────────
+import json as _json
+import shutil as _shutil
+import tempfile as _tempfile
+import time as _time
+from datetime import date as _date, timedelta as _timedelta
+
+import history
+
+
 @router.get("/api/me")
 async def api_me(request: Request):
     user = _current_user(request)
@@ -99,14 +109,109 @@ async def api_me(request: Request):
     return JSONResponse({"username": user["username"], "role": user.get("role")})
 
 
+def _scope(user):
+    """(owner_scope, is_admin)：admin 见全量，普通用户仅本人。"""
+    if not user:
+        return 0, False
+    return (None, True) if user.get("role") == "admin" else (user["id"], False)
+
+
+def _row_item(row):
+    """history 行 → 大屏历史/快查 JSON。"""
+    return {
+        "id": row["id"], "timestamp": row["timestamp"], "image_name": row["image_name"],
+        "high_risk": bool(row["high_risk"]), "has_damage": row["has_damage"],
+        "damage_type": row["damage_type"], "component": row["component"],
+        "priority": row["priority"], "confidence": row["confidence"],
+        "infer_time": row["infer_time"], "note": row.get("note", ""),
+    }
+
+
+def _overview_payload(owner_scope, week, recheck):
+    stats = history.get_stats(owner_scope)
+    total = stats["total"]
+    completion = round(100 * min(total, 120) / 120) if total else 0
+    return {"total": total, "week": week, "high_risk": stats["high_risk"],
+            "recheck": recheck, "completion": completion}
+
+
+def _report_payload(parsed, record_id, infer_time, image_info, recent):
+    """模型报告 → 大屏右列完整报告 JSON（设计文档 §5）。"""
+    from app import _damage_locator_payload, format_summary
+    from parser import get_field
+    import i18n
+    level = get_field(parsed, i18n.SECTION_CONCLUSION, "巡检优先级") or "低"
+    dtype = get_field(parsed, i18n.SECTION_DAMAGE, "损伤类型")
+    conf = get_field(parsed, i18n.SECTION_CONCLUSION, "本次判断的置信度")
+    advice = {"高": "72 小时内停机复检", "中": "纳入例行巡检计划"}.get(level.strip(), "保持常规观察")
+    return {
+        "record_id": record_id,
+        "summary": format_summary(parsed),
+        "risk": {"level": level.strip(), "type": dtype, "confidence": conf},
+        "kv": {
+            "component": get_field(parsed, i18n.SECTION_COMPONENT, "构件名称"),
+            "location": get_field(parsed, i18n.SECTION_DAMAGE, "损伤分布位置与范围"),
+            "size": (get_field(parsed, i18n.SECTION_DAMAGE, "损伤程度")
+                     or get_field(parsed, i18n.SECTION_DAMAGE, "损伤尺寸")
+                     or dtype),
+            "advice": advice,
+            "model": "多模态大模型 v3",
+            "time": _time.strftime("%Y-%m-%d %H:%M:%S"),
+            "report_no": f"RPT-{_time.strftime('%Y%m%d')}-{record_id:04d}",
+        },
+        "locator": _damage_locator_payload(parsed),
+        "image_info": image_info,
+        "recent": recent,
+    }
+
+
+def _week_count(owner_scope):
+    monday = (_date.today() - _timedelta(days=_date.today().weekday())).strftime("%Y-%m-%d")
+    _, total = history.query_records(limit=1, offset=0, owner_user_id=owner_scope,
+                                     date_from=monday)
+    return total
+
+
 @router.get("/api/overview")
 async def api_overview(request: Request):
-    return JSONResponse({"detail": "not implemented"}, status_code=501)
+    user = _current_user(request)
+    scope, _is_admin = _scope(user)
+    return JSONResponse(_overview_payload(scope, _week_count(scope),
+                                          history.get_stats(scope)["high_risk"]))
 
 
 @router.post("/api/analyze")
 async def api_analyze(request: Request):
-    return JSONResponse({"detail": "not implemented"}, status_code=501)
+    user = _current_user(request)
+    if not user:
+        return JSONResponse({"detail": "not authenticated"}, status_code=401)
+    form = await request.form()
+    up = form.get("file")
+    if up is None or not getattr(up, "filename", ""):
+        return JSONResponse({"detail": "no file"}, status_code=400)
+    from app import _do_inference, get_image_info
+    tmpd = _tempfile.mkdtemp(prefix="sc_")
+    path = os.path.join(tmpd, os.path.basename(up.filename))
+    with open(path, "wb") as f:
+        f.write(await up.read())
+    try:
+        parsed, raw, infer_time = _do_inference(path)
+        if parsed is None:
+            return JSONResponse({"detail": "inference failed", "raw": str(raw)[:500]},
+                                status_code=400)
+        owner_scope, _ = _scope(user)
+        rid = history.save_record(os.path.basename(up.filename), parsed, infer_time,
+                                  path, source="screen", persist_image=True,
+                                  owner_user_id=user["id"],
+                                  created_by=user["username"])
+        rows, _total = history.query_records(limit=6, offset=0, owner_user_id=owner_scope)
+        image_info = {"filename": os.path.basename(up.filename),
+                      "meta": get_image_info(path) or ""}
+        payload = _report_payload(parsed, rid, infer_time, image_info,
+                                  [_row_item(r) for r in rows])
+        return JSONResponse(payload)
+    finally:
+        _shutil.rmtree(tmpd, ignore_errors=True)
 
 
 @router.get("/api/records")

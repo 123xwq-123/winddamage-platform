@@ -127,7 +127,8 @@ class TestFarmViewer(unittest.TestCase):
 
     def test_exists_with_vendor_import(self):
         src = self._src()
-        self.assertIn("../vendor/three/three.module.js", src)
+        # farm_viewer 由 /screen-assets/ 提供，vendor 走 /wd-assets 绝对路径
+        self.assertIn("/wd-assets/vendor/three/three.module.js", src)
         self.assertIn("OrbitControls", src)
 
     def test_message_protocol(self):
@@ -139,6 +140,66 @@ class TestFarmViewer(unittest.TestCase):
         src = self._src()
         for anchor in ("turbine", "nacelle", "substation", "damage"):
             self.assertIn(f'"{anchor}"', src)
+
+
+REPORT_HIGH = {
+    "1. 构件识别": {"构件名称": "叶片"},
+    "2. 损伤判定": {"是否存在损伤": "是", "损伤类型": "裂纹",
+                "损伤分布位置与范围": "迎风面 距根部 12.4 m"},
+    "6. 结论建议": {"巡检优先级": "高", "本次判断的置信度": "高"},
+}
+
+
+class TestScreenPayloads(unittest.TestCase):
+    """主页 JSON payload 纯函数契约。"""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        os.environ["WD_DB_PATH"] = os.path.join(self.tmp, "h.db")
+        import history
+        history.init_db()
+        self.history = history
+
+    def tearDown(self):
+        os.environ.pop("WD_DB_PATH", None)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_overview_payload_keys(self):
+        import screen_api
+        p = screen_api._overview_payload(owner_scope=None, week=3, recheck=2)
+        for k in ("total", "week", "high_risk", "recheck", "completion"):
+            self.assertIn(k, p)
+        self.assertEqual(p["week"], 3)
+        self.assertEqual(p["recheck"], 2)
+
+    def test_report_payload_shape(self):
+        import screen_api
+        p = screen_api._report_payload(
+            REPORT_HIGH, record_id=1, infer_time=1.2,
+            image_info={"filename": "a.jpg", "width": 4032, "height": 3024},
+            recent=[])
+        self.assertTrue(p["locator"]["hasDamage"])
+        self.assertEqual(p["locator"]["part"], "叶片")
+        self.assertEqual(p["risk"]["type"], "裂纹")
+        self.assertEqual(p["risk"]["level"], "高")
+        for k in ("component", "location", "size", "advice", "model", "time", "report_no"):
+            self.assertIn(k, p["kv"])
+        self.assertEqual(p["kv"]["component"], "叶片")
+        self.assertIn("复检", p["kv"]["advice"])
+        self.assertEqual(p["recent"], [])
+        self.assertEqual(p["record_id"], 1)
+
+    def test_row_item_shape(self):
+        import screen_api
+        item = screen_api._row_item({
+            "id": 7, "timestamp": "2026-11-16 09:47:00", "image_name": "b.jpg",
+            "high_risk": 1, "has_damage": "是", "damage_type": "裂纹",
+            "component": "叶片", "priority": "高", "confidence": "高",
+            "infer_time": 1.5, "note": ""})
+        for k in ("id", "timestamp", "image_name", "high_risk", "damage_type",
+                  "component", "priority"):
+            self.assertIn(k, item)
+        self.assertTrue(item["high_risk"])
 
 
 if __name__ == "__main__":
