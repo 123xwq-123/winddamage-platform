@@ -114,5 +114,32 @@ class TestScreenLogin(unittest.TestCase):
         self.assertIn("sc-form-error", html)
 
 
+class TestFarmViewer(unittest.TestCase):
+    """3D 风场底座契约：vendor 引入、postMessage 协议、标签锚点。"""
+
+    def setUp(self):
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.p = os.path.join(base, "assets", "screen", "farm_viewer.html")
+
+    def _src(self):
+        with open(self.p, encoding="utf-8") as f:
+            return f.read()
+
+    def test_exists_with_vendor_import(self):
+        src = self._src()
+        self.assertIn("../vendor/three/three.module.js", src)
+        self.assertIn("OrbitControls", src)
+
+    def test_message_protocol(self):
+        src = self._src()
+        for token in ('"wd:labels"', '"wd:damage"', '"wd:focus"', '"wd:ready"'):
+            self.assertIn(token, src)
+
+    def test_anchor_ids(self):
+        src = self._src()
+        for anchor in ("turbine", "nacelle", "substation", "damage"):
+            self.assertIn(f'"{anchor}"', src)
+
+
 if __name__ == "__main__":
     unittest.main()

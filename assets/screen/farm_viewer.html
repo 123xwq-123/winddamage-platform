@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3D 山地风电场底座</title>
+<style>
+*{margin:0}html,body{width:100%;height:100%;overflow:hidden;background:#8FB8D4}
+canvas{display:block}
+</style>
+</head>
+<body>
+<script type="module">
+/* 新版大屏 3D 山地风电场底座（设计：OUTPUT/设计文档.md §4）
+ * 与父页 postMessage 协议：
+ *   入：{type:"wd:damage", hasDamage, part, type, location}  显示/清除损伤高亮
+ *      {type:"wd:focus"}                                     复位视角
+ *   出：{type:"wd:ready"}
+ *      {type:"wd:labels", labels:[{id,x,y,visible}]}          每帧，屏幕坐标 px
+ * 锚点 id：turbine / nacelle / substation / damage
+ */
+import * as THREE from '../vendor/three/three.module.js';
+import { OrbitControls } from '../vendor/three/addons/controls/OrbitControls.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8FB8D4);
+scene.fog = new THREE.Fog(0xB8D4E2, 170, 560);
+
+const camera = new THREE.PerspectiveCamera(40, 1, .1, 900);
+camera.position.set(0, 46, 118);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 34, 0);
+controls.maxPolarAngle = Math.PI * .49;
+controls.minDistance = 45; controls.maxDistance = 300;
+controls.enableDamping = true; controls.dampingFactor = .06;
+
+/* ── 灯光（参数基线：wind_turbine_viewer.html） ── */
+scene.add(new THREE.HemisphereLight(0xf2fbff, 0x507b42, 2.4));
+const key = new THREE.DirectionalLight(0xfff8e9, 4.0);
+key.position.set(60, 95, 45); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -90, right: 90, top: 110, bottom: -40 });
+scene.add(key);
+scene.add(new THREE.DirectionalLight(0xb8e7ff, 1.1).translateX(-60).translateY(50).translateZ(-40));
+
+/* ── 地面（草谷） ── */
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(900, 620, 64, 48),
+  new THREE.MeshStandardMaterial({ color: 0x6CA84C, roughness: .95 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+scene.add(ground);
+
+/* 田地色块（谷地浅色补丁） */
+const patchMat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 1 });
+[[26, 70, -14, 0xB8D878], [-34, 74, 10, 0x7EB052], [58, -18, 26, 0x95C464],
+ [-60, -30, -8, 0xA8D478], [8, 92, 30, 0x8CBE60]].forEach(([x, z, , c], i) => {
+  const p = new THREE.Mesh(new THREE.CircleGeometry(9 + (i % 3) * 3, 20), patchMat(c));
+  p.rotation.x = -Math.PI / 2; p.position.set(x, .02 + i * .004, z);
+  scene.add(p);
+});
+
+/* ── 远山（三层锥体山体，背弧排列） ── */
+const mtnMat = new THREE.MeshStandardMaterial({ color: 0x8E9E84, roughness: 1 });
+const mtnFar = new THREE.MeshStandardMaterial({ color: 0xAFC0BC, roughness: 1 });
+function mountain(x, z, h, r, mat, capColor) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), mat);
+  body.position.y = h / 2; g.add(body);
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(r * .17, h * .16, 7),
+    new THREE.MeshStandardMaterial({ color: capColor, roughness: .9 }));
+  cap.position.y = h - h * .08 + h * .02; g.add(cap);
+  g.position.set(x, 0, z); scene.add(g);
+}
+[[-260, -240, 95, 70, mtnFar, 0xDCE4DC], [-90, -300, 120, 88, mtnFar, 0xDCE4DC],
+ [90, -310, 135, 95, mtnMat, 0xE8ECE0], [260, -250, 105, 80, mtnFar, 0xDCE4DC],
+ [380, -180, 80, 62, mtnFar, 0xDCE4DC], [-390, -170, 78, 60, mtnFar, 0xDCE4DC],
+ [180, -140, 48, 46, mtnMat, 0xE8ECE0], [-190, -135, 42, 42, mtnMat, 0xE8ECE0]]
+  .forEach(a => mountain(...a));
+
+/* ── 盘山道路（曲线压扁管） ── */
+const roadCurve = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(-160, 0, 190), new THREE.Vector3(-80, 0, 120),
+  new THREE.Vector3(0, 0, 70), new THREE.Vector3(50, 0, 20),
+  new THREE.Vector3(60, 0, -22)]);
+const road = new THREE.Mesh(
+  new THREE.TubeGeometry(roadCurve, 48, 1.6, 6),
+  new THREE.MeshStandardMaterial({ color: 0xC9BC8E, roughness: 1 }));
+road.scale.y = .12; road.position.y = .12;
+scene.add(road);
+
+/* ── 树丛（锥形冠 InstancedMesh） ── */
+const treeGeo = new THREE.ConeGeometry(1.4, 3.6, 6);
+const treeMat = new THREE.MeshStandardMaterial({ color: 0x3A6630, roughness: 1 });
+const trees = new THREE.InstancedMesh(treeGeo, treeMat, 64);
+{ const m = new THREE.Matrix4();
+  for (let i = 0; i < 64; i++) {
+    const a = Math.random() * Math.PI * 2, r = 26 + Math.random() * 150;
+    const x = Math.cos(a) * r, z = Math.sin(a) * r * .7 - 10;
+    const s = .8 + Math.random() * 1.1;
+    m.makeScale(s, s, s); m.setPosition(x, 1.8 * s, z);
+    trees.setMatrixAt(i, m);
+  } }
+trees.castShadow = true; scene.add(trees);
+
+/* ── 风机（造型基线：wind_turbine_viewer.html 白色塔筒+机舱+3桨叶） ── */
+const white = new THREE.MeshStandardMaterial({ color: 0xF5F6F2, roughness: .3, metalness: .08 });
+const gray = new THREE.MeshStandardMaterial({ color: 0xC9D3DA, roughness: .6 });
+
+function buildTurbine(h) {
+  const g = new THREE.Group();
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(h * .018, h * .028, h, 10), white);
+  tower.position.y = h / 2; tower.castShadow = true; g.add(tower);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(h * .05, h * .056, 1.1, 12), gray);
+  base.position.y = .55; g.add(base);
+  const nac = new THREE.Mesh(new THREE.BoxGeometry(h * .075, h * .042, h * .038), white);
+  nac.position.set(h * .012, h, 0); nac.castShadow = true; g.add(nac);
+  const hubPos = new THREE.Vector3(h * .05, h, 0);
+  const hub = new THREE.Mesh(new THREE.SphereGeometry(h * .02, 12, 10), white);
+  hub.position.copy(hubPos); g.add(hub);
+  const rotor = new THREE.Group(); rotor.position.copy(hubPos);
+  const L = h * .44;
+  for (let i = 0; i < 3; i++) {
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(L, h * .012, h * .006), white);
+    blade.geometry.translate(L / 2, 0, 0);           // 根部在原点，向外伸展
+    blade.rotation.z = i * (Math.PI * 2 / 3);
+    blade.castShadow = true; rotor.add(blade);
+  }
+  g.add(rotor); g.userData.rotor = rotor; g.userData.h = h;
+  return g;
+}
+
+const mainTurbine = buildTurbine(60);
+scene.add(mainTurbine);
+
+/* 远处风机群（山脊） */
+[[120, -160, .3], [155, -185, .22], [-130, -170, .26], [-165, -195, .2],
+ [200, -120, .17]].forEach(([x, z, s]) => {
+  const t = buildTurbine(60); t.scale.setScalar(s); t.position.set(x, 0, z);
+  scene.add(t);
+});
+
+/* ── 升压站（盒群） ── */
+const sub = new THREE.Group();
+[[0, 0, 9, 5, 3.4, 0xDDDDDD], [11, 0, 6, 4, 2.8, 0xC8CDD2], [-10, 0, 5, 3.4, 2.4, 0xE4E6E8]]
+  .forEach(([x, , w, d, h, c]) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshStandardMaterial({ color: c, roughness: .8 }));
+    b.position.set(x, h / 2, 0); b.castShadow = true; sub.add(b);
+  });
+sub.position.set(58, 0, -26); scene.add(sub);
+
+/* 输电塔（简化格构：细锥柱 + 双横担） */
+const pyMat = new THREE.MeshStandardMaterial({ color: 0x4E5E56, roughness: .9 });
+function pylon(x, z, s) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.28, .9, 13, 4), pyMat);
+  body.position.y = 6.5; g.add(body);
+  const a1 = new THREE.Mesh(new THREE.BoxGeometry(4.4, .3, .3), pyMat); a1.position.y = 11.5; g.add(a1);
+  const a2 = new THREE.Mesh(new THREE.BoxGeometry(3.2, .28, .28), pyMat); a2.position.y = 9.6; g.add(a2);
+  g.position.set(x, 0, z); g.scale.setScalar(s); scene.add(g);
+}
+pylon(28, 18, 1.15); pylon(44, 2, 1.0); pylon(53, -14, .9);
+
+/* ── 云（球簇，缓慢平移） ── */
+const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .78, depthWrite: false });
+const clouds = [];
+for (let i = 0; i < 7; i++) {
+  const g = new THREE.Group();
+  [[0, 0, 0, 7], [9, 1.4, 0, 9], [-9, .6, 0, 7.5], [3, 3.4, 0, 7.6]].forEach(q => {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(q[3], 14, 10), cloudMat);
+    p.position.set(q[0], q[1], q[2]); g.add(p);
+  });
+  g.position.set(-320 + Math.random() * 640, 95 + Math.random() * 45, -230 + Math.random() * 200);
+  g.userData.v = 1.1 + Math.random() * 1.2;
+  scene.add(g); clouds.push(g);
+}
+
+/* ── 损伤标记（挂主角风机叶片根部） ── */
+const dmgGroup = new THREE.Group();
+const dmgCore = new THREE.Mesh(new THREE.SphereGeometry(.9, 12, 10),
+  new THREE.MeshBasicMaterial({ color: 0xF87171 }));
+const dmgHalo = new THREE.Mesh(new THREE.SphereGeometry(1.7, 12, 10),
+  new THREE.MeshBasicMaterial({ color: 0xF87171, transparent: true, opacity: .3 }));
+dmgGroup.add(dmgCore); dmgGroup.add(dmgHalo);
+dmgGroup.position.set(60 * .05 + 3, 60 + 2.2, 0);  // 叶轮根部附近
+dmgGroup.visible = false;
+scene.add(dmgGroup);
+
+/* ── 标签锚点 ── */
+const anchors = {
+  turbine: new THREE.Object3D(),
+  nacelle: new THREE.Object3D(),
+  substation: new THREE.Object3D(),
+  damage: dmgGroup,
+};
+anchors.turbine.position.set(0, 72, 0);      // 轮毂上方
+anchors.nacelle.position.set(3.2, 58.5, 0);  // 机舱下方
+anchors.substation.position.set(58, 10, -26);
+Object.values(anchors).forEach(a => { if (a !== dmgGroup) scene.add(a); });
+const LABEL_IDS = ["turbine", "nacelle", "substation", "damage"];
+const _v = new THREE.Vector3();
+
+function postLabels() {
+  const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
+  const labels = LABEL_IDS.map(id => {
+    const obj = anchors[id];
+    _v.setFromMatrixPosition(obj.matrixWorld).project(camera);
+    return { id, x: (_v.x * .5 + .5) * w, y: (-_v.y * .5 + .5) * h, visible: _v.z < 1 };
+  });
+  parent.postMessage({ type: "wd:labels", labels }, "*");
+}
+
+/* ── 父页消息 ── */
+let pulseT = 0;
+addEventListener("message", (e) => {
+  const m = e.data || {};
+  if (m.type === "wd:damage") {
+    dmgGroup.visible = !!m.hasDamage;
+    if (m.hasDamage) dmgGroup.userData.info = m;
+  } else if (m.type === "wd:focus") {
+    controls.reset();
+  }
+});
+
+function onResize() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+addEventListener("resize", onResize); onResize();
+
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), .08);
+  mainTurbine.userData.rotor.rotation.z -= dt * .55;
+  for (const t of clouds) {
+    t.position.x += t.userData.v * dt;
+    if (t.position.x > 340) t.position.x = -340;
+  }
+  if (dmgGroup.visible) {
+    pulseT += dt;
+    const s = 1 + Math.sin(pulseT * 4) * .18;
+    dmgHalo.scale.setScalar(s);
+  }
+  controls.update();
+  postLabels();
+  renderer.render(scene, camera);
+});
+parent.postMessage({ type: "wd:ready" }, "*");
+</script>
+</body>
+</html>
