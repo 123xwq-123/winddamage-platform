@@ -489,5 +489,123 @@ class TestScreenAccountApi(unittest.TestCase):
         self.assertEqual(forbidden.status_code, 403)
 
 
+class TestScreenLoginV2(unittest.TestCase):
+    """登录页 V2：开放注册 + 记住密码（30 天免登录 + 本地记忆）。"""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        os.environ["WD_DB_PATH"] = os.path.join(self.tmp, "h.db")
+        import history
+        history.init_db()
+        self.uid = auth.create_user("v2login", "Passw0rd1")
+
+    def tearDown(self):
+        os.environ.pop("WD_DB_PATH", None)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _client(self):
+        from fastapi.testclient import TestClient
+        import server
+        return TestClient(server.create_app())
+
+    def _max_age(self, resp):
+        import re
+        m = re.search(r"max-age=(\d+)", resp.headers.get("set-cookie", ""), re.I)
+        return int(m.group(1)) if m else None
+
+    def test_register_success_auto_login(self):
+        with self._client() as c:
+            r = c.post("/screen/register", data={
+                "username": "NewInspector", "password": "Passw0rd1",
+                "confirm": "Passw0rd1"}, follow_redirects=False)
+            self.assertEqual(r.status_code, 302)
+            self.assertEqual(r.headers["location"], "/screen")
+            self.assertIsNotNone(self._max_age(r))   # 已下发会话 Cookie
+            u = auth.get_user_by_name("newinspector")
+            self.assertIsNotNone(u)
+            self.assertEqual(u["role"], "user")
+            # 带 Cookie 能进大屏
+            r2 = c.get("/screen", follow_redirects=False)
+            self.assertEqual(r2.status_code, 200)
+
+    def test_register_duplicate_username(self):
+        with self._client() as c:
+            r = c.post("/screen/register", data={
+                "username": "v2login", "password": "Passw0rd1",
+                "confirm": "Passw0rd1"})
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("已被注册", r.text)
+
+    def test_register_weak_password(self):
+        with self._client() as c:
+            r = c.post("/screen/register", data={
+                "username": "weakpw", "password": "1234",
+                "confirm": "1234"})
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("密码", r.text)
+            self.assertIsNone(auth.get_user_by_name("weakpw"))
+
+    def test_register_password_mismatch(self):
+        with self._client() as c:
+            r = c.post("/screen/register", data={
+                "username": "mismatch", "password": "Passw0rd1",
+                "confirm": "Passw0rd2"})
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("不一致", r.text)
+            self.assertIsNone(auth.get_user_by_name("mismatch"))
+
+    def test_register_route_open_unauthenticated(self):
+        """回归：未登录 POST /screen/register 不得被中间件 302 拦截。"""
+        with self._client() as c:
+            r = c.post("/screen/register", data={}, follow_redirects=False)
+            self.assertEqual(r.status_code, 200)
+
+    def test_login_remember_extends_session(self):
+        with self._client() as c:
+            r = c.post("/screen/login", data={
+                "username": "v2login", "password": "Passw0rd1",
+                "remember": "on"}, follow_redirects=False)
+            self.assertEqual(r.status_code, 302)
+            self.assertEqual(self._max_age(r), 30 * 86400)
+            # 服务端会话有效期约 30 天
+            import datetime as _dt
+            token = c.cookies.get("wd_session")
+            row = auth.get_conn().execute(
+                "SELECT expires_at FROM sessions WHERE token = ?", (token,)).fetchone()
+            delta = (_dt.datetime.strptime(row["expires_at"], "%Y-%m-%d %H:%M:%S")
+                     - _dt.datetime.now()).total_seconds()
+            self.assertTrue(29.9 * 86400 < delta <= 30.1 * 86400)
+
+    def test_login_without_remember_default_ttl(self):
+        with self._client() as c:
+            r = c.post("/screen/login", data={
+                "username": "v2login", "password": "Passw0rd1"},
+                follow_redirects=False)
+            self.assertEqual(self._max_age(r), auth.SESSION_TTL_HOURS * 3600)
+
+    def test_create_session_days_param(self):
+        import datetime as _dt
+        token = auth.create_session(self.uid, days=30)
+        row = auth.get_conn().execute(
+            "SELECT expires_at FROM sessions WHERE token = ?", (token,)).fetchone()
+        delta = (_dt.datetime.strptime(row["expires_at"], "%Y-%m-%d %H:%M:%S")
+                 - _dt.datetime.now()).total_seconds()
+        self.assertTrue(29.9 * 86400 < delta <= 30.1 * 86400)
+        # 不传 days 保持旧行为（SESSION_TTL_HOURS 小时）
+        token2 = auth.create_session(self.uid)
+        row2 = auth.get_conn().execute(
+            "SELECT expires_at FROM sessions WHERE token = ?", (token2,)).fetchone()
+        delta2 = (_dt.datetime.strptime(row2["expires_at"], "%Y-%m-%d %H:%M:%S")
+                  - _dt.datetime.now()).total_seconds()
+        self.assertTrue(delta2 <= auth.SESSION_TTL_HOURS * 3600 + 5)
+
+    def test_login_page_v2_has_tabs_and_remember(self):
+        import asyncio
+        import screen_api
+        html = asyncio.run(screen_api.login_page())
+        for token in ("data-mode", "记住密码", "screen-assets/login.js", "注册"):
+            self.assertIn(token, html.body.decode("utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

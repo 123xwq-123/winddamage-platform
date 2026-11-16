@@ -244,13 +244,17 @@ def authenticate(username: str, password: str) -> Tuple[str, object]:
 
 # ─── 会话 ─────────────────────────────────────────────────
 
-def create_session(user_id: int) -> str:
-    """签发新会话 token，并顺手清理过期会话。"""
+def create_session(user_id: int, days: Optional[float] = None) -> str:
+    """签发新会话 token，并顺手清理过期会话。
+
+    days 指定自定义有效期（天），用于「记住密码」长效登录；不传保持旧行为。
+    """
     token = secrets.token_hex(32)
+    expires = _expires(days * 24) if days else _expires()
     conn = get_conn()
     conn.execute(
         "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-        (token, user_id, _now(), _expires()))
+        (token, user_id, _now(), expires))
     conn.execute("DELETE FROM sessions WHERE expires_at < ?", (_now(),))
     conn.commit()
     conn.close()

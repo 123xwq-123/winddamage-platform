@@ -28,24 +28,70 @@ def _current_user(request: Request):
     return auth.user_for_request(request)
 
 
-# ─── 登录 ─────────────────────────────────────────────────────
-def _login_page_html(error: str = "") -> str:
+# ─── 登录 / 注册 ─────────────────────────────────────────────
+_LOGIN_ERR = {
+    "auth_username_invalid": "账号格式不正确",
+    "auth_pw_len": "密码长度不足（至少 8 位）",
+    "auth_pw_letter": "密码需包含字母",
+    "auth_pw_digit": "密码需包含数字",
+    "dup": "该账号已被注册",
+    "confirm": "两次输入的密码不一致",
+}
+
+
+def _login_page_html(error: str = "", mode: str = "login") -> str:
+    """大屏登录/注册页。mode: "login" | "register"（错误回显时保持所在 Tab）。"""
     err = f'<div class="sc-form-error">{error}</div>' if error else ""
+    reg_active = " active" if mode == "register" else ""
+    log_active = " active" if mode != "register" else ""
     return (
         '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         '<title>登录 · 智慧风电检测监管平台</title>'
-        '<link rel="stylesheet" href="/screen-assets/screen.css"></head>'
+        '<link rel="stylesheet" href="/screen-assets/screen.css">'
+        '<style>'
+        '.sc-tabs{display:flex;gap:6px;margin:14px 0 4px;background:rgba(7,20,40,.55);'
+        'border-radius:8px;padding:4px}'
+        '.sc-tab{flex:1;height:34px;border:0;border-radius:6px;cursor:pointer;'
+        'background:transparent;color:#7E9CBE;font-size:14px;letter-spacing:2px}'
+        '.sc-tab.active{background:linear-gradient(135deg,#0E7490,#22D3EE);color:#fff}'
+        '.sc-login-box form.sc-mode{display:none}'
+        '.sc-login-box form.sc-mode.active{display:flex;flex-direction:column;gap:16px}'
+        '.sc-login-box label.sc-remember{display:flex;flex-direction:row;align-items:center;gap:8px}'
+        '.sc-login-box label.sc-remember input{width:15px;height:15px;min-height:0;padding:0;'
+        'border:0;background:transparent;accent-color:#22D3EE;box-shadow:none;flex:none}'
+        '.sc-form-hint{font-size:12px;color:#7E9CBE;margin:-6px 0 4px}'
+        '</style></head>'
         '<body class="sc-page sc-login">'
         '<div class="sc-login-box sc-panel">'
         '<div class="sc-login-title">智慧风电检测监管平台</div>'
         '<div class="sc-login-sub">WIND POWER INSPECTION PLATFORM</div>'
+        '<div class="sc-tabs">'
+        f'<button type="button" class="sc-tab{log_active}" data-mode="login">登 录</button>'
+        f'<button type="button" class="sc-tab{reg_active}" data-mode="register">注 册</button>'
+        '</div>'
         + err +
-        '<form method="post" action="/screen/login">'
-        '<label>账号<input name="username" autocomplete="username" required></label>'
-        '<label>密码<input name="password" type="password" autocomplete="current-password" required></label>'
+        '<form method="post" action="/screen/login" class="sc-mode sc-mode-login' + log_active + '">'
+        '<label>账号<input name="username" id="li-user" autocomplete="username" required></label>'
+        '<label>密码<input name="password" id="li-pw" type="password"'
+        ' autocomplete="current-password" required></label>'
+        '<label class="sc-remember"><input type="checkbox" name="remember" id="li-remember">'
+        '记住密码（30 天免登录）</label>'
         '<button class="sc-btn primary" type="submit">登 录</button>'
-        '</form></div></body></html>')
+        '</form>'
+        '<form method="post" action="/screen/register" class="sc-mode sc-mode-register' + reg_active + '"'
+        ' id="rg-form">'
+        '<label>账号<input name="username" id="rg-user" autocomplete="username" required></label>'
+        '<label>密码<input name="password" id="rg-pw" type="password"'
+        ' autocomplete="new-password" required></label>'
+        '<label>确认密码<input name="confirm" id="rg-pw2" type="password"'
+        ' autocomplete="new-password" required></label>'
+        '<div class="sc-form-hint">密码至少 8 位，需包含字母和数字；新账号为巡检员角色</div>'
+        '<button class="sc-btn primary" type="submit">注册并登录</button>'
+        '</form>'
+        '</div>'
+        '<script src="/screen-assets/login.js"></script>'
+        '</body></html>')
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -59,15 +105,50 @@ async def login_submit(request: Request):
     status, payload = auth.authenticate(str(form.get("username") or ""),
                                         str(form.get("password") or ""))
     if status == "ok":
+        remember = str(form.get("remember") or "").lower() in ("on", "1", "true")
+        days = 30 if remember else None
         resp = RedirectResponse("/screen", status_code=302)
         resp.set_cookie(
-            auth.SESSION_COOKIE, auth.create_session(payload["id"]),
+            auth.SESSION_COOKIE, auth.create_session(payload["id"], days=days),
             httponly=True, samesite="lax",
-            max_age=auth.SESSION_TTL_HOURS * 3600, path="/")
+            max_age=30 * 86400 if days else auth.SESSION_TTL_HOURS * 3600, path="/")
         return resp
     if status == "locked":
         return _page(_login_page_html(f"尝试过多，已锁定，请 {payload} 分钟后重试"))
     return _page(_login_page_html("账号或密码错误"))
+
+
+@router.post("/register", response_class=HTMLResponse)
+async def register_submit(request: Request):
+    """开放注册：创建巡检员账号并自动登录。"""
+    form = await request.form()
+    username = str(form.get("username") or "")
+    password = str(form.get("password") or "")
+    confirm = str(form.get("confirm") or "")
+
+    def fail(code):
+        return _page(_login_page_html(_LOGIN_ERR.get(code, "注册失败"), mode="register"))
+
+    if password != confirm:
+        return fail("confirm")
+    uissue = auth.username_issue(username)
+    if uissue:
+        return fail(uissue)
+    issues = auth.password_issues(password)
+    if issues:
+        return fail(issues[0])
+    try:
+        uid = auth.create_user(username, password, role="user")
+    except auth.UsernameExists:
+        return fail("dup")
+    except ValueError as exc:
+        return fail(str(exc))
+    resp = RedirectResponse("/screen", status_code=302)
+    resp.set_cookie(
+        auth.SESSION_COOKIE, auth.create_session(uid),
+        httponly=True, samesite="lax",
+        max_age=auth.SESSION_TTL_HOURS * 3600, path="/")
+    return resp
 
 
 # ─── 页面（骨架占位；Task 4-7 逐页充实） ──────────────────────

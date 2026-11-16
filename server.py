@@ -450,8 +450,8 @@ def create_app():
         if path.startswith("/screen-assets"):
             return await _finish(request, call_next)   # 静态资源放行（登录页样式依赖）
         if path.startswith("/screen"):
-            if path == "/screen/login":
-                return await _finish(request, call_next)   # 登录页本身放行（防重定向环）
+            if path in ("/screen/login", "/screen/register"):
+                return await _finish(request, call_next)   # 登录/注册页放行（防重定向环）
             next_url = "/screen/login?expired=1" if token else "/screen/login"
             return RedirectResponse(next_url, status_code=302)
         if path in _PROTECTED_EXACT or path.startswith("/history/"):
