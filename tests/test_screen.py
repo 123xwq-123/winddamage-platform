@@ -388,5 +388,79 @@ class TestScreenBatchApi(unittest.TestCase):
         self.assertIn("model offline", data["results"][0]["error"])
 
 
+class TestScreenAccountApi(unittest.TestCase):
+    """账户中心 API 契约：改密、用户管理权限、导出。"""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        os.environ["WD_DB_PATH"] = os.path.join(self.tmp, "h.db")
+        import history
+        history.init_db()
+        self.history = history
+        self.uid = auth.create_user("acctop", "Passw0rd1")
+        self.admin_uid = auth.create_user("acctadmin", "Passw0rd1", role="admin")
+        self.rid = self.history.save_record("exp.jpg", REPORT_HIGH, 1.0, "",
+                                            owner_user_id=self.uid,
+                                            created_by="acctop")
+
+    def tearDown(self):
+        os.environ.pop("WD_DB_PATH", None)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _req(self, uid, body=None):
+        return FakeReq("wd_session=" + auth.create_session(uid), body)
+
+    def _body(self, resp):
+        import json as _j
+        return _j.loads(resp.body)
+
+    def test_change_password_flow(self):
+        import asyncio
+        import screen_api
+        bad = asyncio.run(screen_api.api_change_password(
+            self._req(self.uid, {"old_password": "wrong", "new_password": "NewPass9x"})))
+        self.assertEqual(bad.status_code, 400)
+        ok = asyncio.run(screen_api.api_change_password(
+            self._req(self.uid, {"old_password": "Passw0rd1", "new_password": "NewPass9x"})))
+        self.assertEqual(self._body(ok), {"ok": True})
+        status, payload = auth.authenticate("acctop", "NewPass9x")
+        self.assertEqual(status, "ok")
+
+    def test_users_api_admin_only(self):
+        import asyncio
+        import screen_api
+        forbidden = asyncio.run(screen_api.api_users(self._req(self.uid)))
+        self.assertEqual(forbidden.status_code, 403)
+        ok = asyncio.run(screen_api.api_users(self._req(self.admin_uid)))
+        users = self._body(ok)["users"]
+        self.assertTrue(any(u["username"] == "acctop" for u in users))
+        self.assertFalse(any("pw_hash" in u or "pw_salt" in u for u in users))
+
+    def test_user_action_admin_only(self):
+        import asyncio
+        import screen_api
+        forbidden = asyncio.run(screen_api.api_user_action(
+            self._req(self.uid, {"action": "deactivate"}), target_id=self.uid))
+        self.assertEqual(forbidden.status_code, 403)
+        ok = asyncio.run(screen_api.api_user_action(
+            self._req(self.admin_uid, {"action": "deactivate"}), target_id=self.uid))
+        self.assertEqual(self._body(ok), {"ok": True})
+        self.assertEqual(auth.get_user(self.uid)["is_active"], 0)
+        asyncio.run(screen_api.api_user_action(
+            self._req(self.admin_uid, {"action": "activate"}), target_id=self.uid))
+        self.assertEqual(auth.get_user(self.uid)["is_active"], 1)
+
+    def test_export_endpoint(self):
+        import asyncio
+        import screen_api
+        ok = asyncio.run(screen_api.api_export(self._req(self.uid), record_id=self.rid))
+        self.assertEqual(ok.status_code, 200)
+        text = ok.body.decode("utf-8")
+        self.assertIn("叶片", text)
+        forbidden = asyncio.run(screen_api.api_export(
+            self._req(auth.create_user("expother", "Passw0rd1")), record_id=self.rid))
+        self.assertEqual(forbidden.status_code, 403)
+
+
 if __name__ == "__main__":
     unittest.main()

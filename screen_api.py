@@ -6,7 +6,8 @@
 import os
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import (HTMLResponse, RedirectResponse, JSONResponse,
+                               Response)
 
 import auth
 
@@ -88,9 +89,95 @@ async def history_page(request: Request):
         return _page(f.read())
 
 
+# ─── 账户 / 用户管理 / 导出 ──────────────────────────────────
+@router.post("/api/change-password")
+async def api_change_password(request: Request):
+    user = _current_user(request)
+    if not user:
+        return JSONResponse({"detail": "not authenticated"}, status_code=401)
+    body = await request.json()
+    token = auth.parse_cookie(request.headers.get("cookie"))
+    ok, err = auth.change_password(user["id"], str(body.get("old_password") or ""),
+                                   str(body.get("new_password") or ""),
+                                   current_token=token)
+    if not ok:
+        return JSONResponse({"detail": err or "change failed"}, status_code=400)
+    return JSONResponse({"ok": True})
+
+
+def _user_public(u):
+    return {k: u.get(k) for k in ("id", "username", "role", "is_active",
+                                  "created_at", "last_login")}
+
+
+@router.get("/api/users")
+async def api_users(request: Request):
+    user = _current_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"detail": "admin only"}, status_code=403)
+    return JSONResponse({"users": [_user_public(u) for u in auth.list_users()]})
+
+
+@router.post("/api/users/{target_id}/action")
+async def api_user_action(request: Request, target_id: int):
+    user = _current_user(request)
+    if not user or user.get("role") != "admin":
+        return JSONResponse({"detail": "admin only"}, status_code=403)
+    body = await request.json()
+    action = str(body.get("action") or "")
+    value = body.get("value")
+    if target_id == user["id"] and action in ("deactivate", "set_role"):
+        return JSONResponse({"detail": "cannot modify own account this way"}, status_code=400)
+    if action == "activate":
+        auth.set_user_active(target_id, True)
+    elif action == "deactivate":
+        auth.set_user_active(target_id, False)
+    elif action == "unlock":
+        auth.unlock_user(target_id)
+    elif action == "set_role":
+        if value not in ("admin", "user"):
+            return JSONResponse({"detail": "bad role"}, status_code=400)
+        auth.set_user_role(target_id, value)
+    elif action == "reset_password":
+        err = auth.reset_password(target_id, str(value or ""))
+        if err:
+            return JSONResponse({"detail": err}, status_code=400)
+    else:
+        return JSONResponse({"detail": "unknown action"}, status_code=400)
+    return JSONResponse({"ok": True})
+
+
+@router.get("/api/export/{record_id}")
+async def api_export(request: Request, record_id: int):
+    """导出单条记录的 Markdown 报告（内存生成，不落盘）。"""
+    user = _current_user(request)
+    if not user:
+        return JSONResponse({"detail": "not authenticated"}, status_code=401)
+    rec = history.get_record(record_id)
+    if not rec:
+        return JSONResponse({"detail": "not found"}, status_code=404)
+    if not history.can_access(rec, user["id"], user.get("role") == "admin"):
+        return JSONResponse({"detail": "forbidden"}, status_code=403)
+    from exporter import export_markdown
+    import json as _j
+    try:
+        report = (_j.loads(rec["json_report"])
+                  if isinstance(rec.get("json_report"), str)
+                  else (rec.get("json_report") or {}))
+    except (ValueError, TypeError):
+        report = {}
+    md = export_markdown(report, rec.get("image_name") or "",
+                         rec.get("infer_time") or 0)
+    return Response(
+        content=md, media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="report_{record_id}.md"',
+                 "Cache-Control": "no-cache"})
+
+
 @router.get("/account", response_class=HTMLResponse)
 async def account_page(request: Request):
-    return _page("<h1>screen account placeholder</h1>")
+    with open(os.path.join(SCREEN_DIR, "account.html"), encoding="utf-8") as f:
+        return _page(f.read())
 
 
 # ─── JSON API ─────────────────────────────────────────────────
