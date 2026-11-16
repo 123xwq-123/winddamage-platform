@@ -83,7 +83,8 @@ async def batch_page(request: Request):
 
 @router.get("/history", response_class=HTMLResponse)
 async def history_page(request: Request):
-    return _page("<h1>screen history placeholder</h1>")
+    with open(os.path.join(SCREEN_DIR, "history.html"), encoding="utf-8") as f:
+        return _page(f.read())
 
 
 @router.get("/account", response_class=HTMLResponse)
@@ -215,5 +216,67 @@ async def api_analyze(request: Request):
 
 
 @router.get("/api/records")
-async def api_records(request: Request):
-    return JSONResponse({"detail": "not implemented"}, status_code=501)
+async def api_records(request: Request, page: int = 1, page_size: int = 15,
+                      search: str = "", risk: str = "", date_from: str = "",
+                      date_to: str = "", sort: str = "time_desc"):
+    user = _current_user(request)
+    if not user:
+        return JSONResponse({"detail": "not authenticated"}, status_code=401)
+    scope, _is_admin = _scope(user)
+    rows, total = history.query_records(
+        limit=page_size, offset=max(0, (page - 1) * page_size),
+        owner_user_id=scope, search=search.strip(),
+        risk={"high": "high", "normal": "normal"}.get(risk.strip(), ""),
+        date_from=date_from.strip(), date_to=date_to.strip(), sort=sort.strip())
+    return JSONResponse({"rows": [_row_item(r) for r in rows], "total": total,
+                         "stats": history.get_stats(scope)})
+
+
+@router.get("/api/records/{record_id}")
+async def api_record_detail(request: Request, record_id: int):
+    user = _current_user(request)
+    if not user:
+        return JSONResponse({"detail": "not authenticated"}, status_code=401)
+    rec = history.get_record(record_id)
+    if not rec:
+        return JSONResponse({"detail": "not found"}, status_code=404)
+    if not history.can_access(rec, user["id"], user.get("role") == "admin"):
+        return JSONResponse({"detail": "forbidden"}, status_code=403)
+    import json as _j
+    detail = dict(rec)
+    try:
+        detail["json_report"] = (_j.loads(rec["json_report"])
+                                 if isinstance(rec.get("json_report"), str)
+                                 else rec.get("json_report"))
+    except (ValueError, TypeError):
+        pass
+    return JSONResponse(detail)
+
+
+@router.post("/api/records/{record_id}/note")
+async def api_record_note(request: Request, record_id: int):
+    user = _current_user(request)
+    if not user:
+        return JSONResponse({"detail": "not authenticated"}, status_code=401)
+    rec = history.get_record(record_id)
+    if not rec:
+        return JSONResponse({"detail": "not found"}, status_code=404)
+    if not history.can_access(rec, user["id"], user.get("role") == "admin"):
+        return JSONResponse({"detail": "forbidden"}, status_code=403)
+    body = await request.json()
+    history.update_note(record_id, str(body.get("note") or ""))
+    return JSONResponse({"ok": True})
+
+
+@router.delete("/api/records/{record_id}")
+async def api_record_delete(request: Request, record_id: int):
+    user = _current_user(request)
+    if not user:
+        return JSONResponse({"detail": "not authenticated"}, status_code=401)
+    rec = history.get_record(record_id)
+    if not rec:
+        return JSONResponse({"detail": "not found"}, status_code=404)
+    if not history.can_access(rec, user["id"], user.get("role") == "admin"):
+        return JSONResponse({"detail": "forbidden"}, status_code=403)
+    history.delete_record(record_id)
+    return JSONResponse({"ok": True})

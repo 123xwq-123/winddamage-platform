@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>历史记录 · 智慧风电检测监管平台</title>
+<link rel="stylesheet" href="/screen-assets/screen.css">
+<style>
+.sc-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.sc-input { height:36px; padding:0 12px; border-radius:6px; font-size:13px;
+  border:1px solid rgba(103,232,249,.35); background:rgba(7,20,40,.7); color:#EAF4FC; outline:none; }
+.sc-input:focus { border-color:#22D3EE; }
+.sc-select { appearance:auto; }
+.sc-pager { display:flex; gap:10px; align-items:center; justify-content:center; padding:12px 0 4px;
+  color:#CFE2F2; font-size:13px; }
+.sc-pager button { width:34px; height:32px; border-radius:6px; cursor:pointer;
+  border:1px solid rgba(103,232,249,.4); background:rgba(10,28,54,.7); color:#EAF4FC; }
+.sc-pager button:disabled { opacity:.4; cursor:not-allowed; }
+table.sc-main { width:100%; border-collapse:collapse; font-size:13px; }
+table.sc-main th { color:#7E9CBE; font-weight:400; text-align:left; padding:8px 10px;
+  border-bottom:1px solid rgba(103,232,249,.25); letter-spacing:1px; }
+table.sc-main td { color:#EAF4FC; padding:9px 10px; border-bottom:1px solid rgba(103,232,249,.08); }
+table.sc-main tr:hover td { background:rgba(34,211,238,.06); }
+.sc-link { color:#22D3EE; cursor:pointer; margin-right:10px; }
+.sc-link.danger { color:#F87171; }
+.sc-drawer { position:fixed; inset:0; z-index:40; display:none; }
+.sc-drawer.open { display:block; }
+.sc-drawer .mask { position:absolute; inset:0; background:rgba(3,10,22,.55); }
+.sc-drawer .box { position:absolute; top:76px; bottom:60px; left:50%; transform:translateX(-50%);
+  width:min(980px, 92vw); overflow:auto; padding:18px 22px; }
+.sc-drawer h3 { font-size:16px; letter-spacing:2px; margin-bottom:12px; }
+.sc-drawer .close { position:absolute; top:12px; right:16px; cursor:pointer; color:#7E9CBE; font-size:20px; }
+.sc-sec { margin-bottom:14px; }
+.sc-sec .t { font-size:13px; color:#22D3EE; letter-spacing:1px; margin-bottom:6px;
+  border-left:3px solid #22D3EE; padding-left:8px; }
+.sc-note-row { display:flex; gap:10px; margin-top:12px; }
+.sc-note-row input { flex:1; }
+</style>
+</head>
+<body class="sc-page">
+
+<div id="sc-scene"><iframe src="/screen-assets/farm_viewer.html" title="3D风场" tabindex="-1"></iframe></div>
+
+<header class="sc-topbar">
+  <div class="sc-logo" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8">
+      <circle cx="12" cy="12" r="2.2" fill="#fff" stroke="none"/>
+      <path d="M12 9.8V3.2M14 13.2l5.6 3.2M10 13.2L4.4 16.4"/>
+    </svg>
+  </div>
+  <div class="sc-title">历史记录<small>INSPECTION HISTORY</small></div>
+  <div class="sc-top-right">
+    <a class="sc-btn" href="/screen" style="height:36px;padding:0 18px;font-size:13px">← 返回大屏</a>
+  </div>
+</header>
+
+<div class="sc-subpage">
+  <section class="sc-panel">
+    <div class="sc-toolbar">
+      <input class="sc-input" id="f-search" placeholder="搜索图片名…" style="width:200px">
+      <select class="sc-input sc-select" id="f-risk">
+        <option value="">全部风险</option><option value="high">仅高风险</option><option value="normal">仅正常</option>
+      </select>
+      <input class="sc-input" id="f-from" type="date" title="开始日期">
+      <span style="color:#7E9CBE">至</span>
+      <input class="sc-input" id="f-to" type="date" title="结束日期">
+      <select class="sc-input sc-select" id="f-sort">
+        <option value="time_desc">最新优先</option><option value="time_asc">最早优先</option>
+      </select>
+      <button class="sc-btn" id="f-go" style="height:36px;padding:0 22px;font-size:13px">查 询</button>
+      <span id="f-total" style="margin-left:auto;color:#7E9CBE;font-size:13px"></span>
+    </div>
+  </section>
+
+  <section class="sc-panel" style="flex:1;overflow:auto">
+    <table class="sc-main">
+      <thead><tr><th>#</th><th>时间</th><th>图片</th><th>构件</th><th>损伤类型</th><th>优先级</th><th>风险</th><th>耗时</th><th>备注</th><th>操作</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="10"><div class="sc-empty">加载中…</div></td></tr></tbody>
+    </table>
+    <div class="sc-pager">
+      <button id="pg-prev">‹</button><span id="pg-info">1 / 1</span><button id="pg-next">›</button>
+    </div>
+  </section>
+</div>
+
+<!-- 详情抽屉 -->
+<div class="sc-drawer" id="drawer">
+  <div class="mask" id="drawer-mask"></div>
+  <div class="box sc-panel">
+    <span class="close" id="drawer-close">✕</span>
+    <h3 id="drawer-title">详情</h3>
+    <div id="drawer-body"></div>
+    <div class="sc-note-row">
+      <input class="sc-input" id="note-input" placeholder="备注（巡检意见）…">
+      <button class="sc-btn" id="note-save" style="height:36px;padding:0 20px;font-size:13px">保存备注</button>
+    </div>
+  </div>
+</div>
+
+<script src="/screen-assets/history.js"></script>
+</body>
+</html>

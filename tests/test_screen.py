@@ -202,5 +202,105 @@ class TestScreenPayloads(unittest.TestCase):
         self.assertTrue(item["high_risk"])
 
 
+class FakeReq:
+    """轻量请求桩：auth.user_for_request 只依赖 headers.get("cookie")。"""
+
+    def __init__(self, cookie="", body=None):
+        self.headers = {"cookie": cookie}
+        self._body = body or {}
+
+    async def json(self):
+        return self._body
+
+
+def _cookie_for(uid):
+    return "wd_session=" + auth.create_session(uid)
+
+
+class TestScreenRecordsApi(unittest.TestCase):
+    """历史记录 API 契约：scope 过滤、详情权限、备注/删除。"""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        os.environ["WD_DB_PATH"] = os.path.join(self.tmp, "h.db")
+        import history
+        history.init_db()
+        self.history = history
+        self.uid = auth.create_user("recowner", "Passw0rd1")
+        self.other_uid = auth.create_user("recother", "Passw0rd1")
+        self.rid = history.save_record("a.jpg", REPORT_HIGH, 1.2, "",
+                                       owner_user_id=self.uid, created_by="recowner")
+
+    def tearDown(self):
+        os.environ.pop("WD_DB_PATH", None)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _body(self, resp):
+        import json as _j
+        return _j.loads(resp.body)
+
+    def test_records_api_returns_scope_rows(self):
+        import asyncio
+        import screen_api
+        # 他人记录不可见
+        self.history.save_record("b.jpg", REPORT_HIGH, 0.9, "",
+                                 owner_user_id=self.other_uid, created_by="recother")
+        resp = asyncio.run(screen_api.api_records(FakeReq(_cookie_for(self.uid))))
+        data = self._body(resp)
+        self.assertEqual(data["total"], 1)
+        self.assertEqual(data["rows"][0]["id"], self.rid)
+        for k in ("rows", "total", "stats"):
+            self.assertIn(k, data)
+        # admin 见全部
+        admin_uid = auth.create_user("recadmin", "Passw0rd1", role="admin")
+        resp2 = asyncio.run(screen_api.api_records(FakeReq(_cookie_for(admin_uid))))
+        self.assertEqual(self._body(resp2)["total"], 2)
+
+    def test_records_api_filters(self):
+        import asyncio
+        import screen_api
+        resp = asyncio.run(screen_api.api_records(
+            FakeReq(_cookie_for(self.uid)), risk="high"))
+        self.assertEqual(self._body(resp)["total"], 1)
+        resp2 = asyncio.run(screen_api.api_records(
+            FakeReq(_cookie_for(self.uid)), search="b.jpg"))
+        self.assertEqual(self._body(resp2)["total"], 0)
+
+    def test_record_detail_permission(self):
+        import asyncio
+        import screen_api
+        ok = asyncio.run(screen_api.api_record_detail(
+            FakeReq(_cookie_for(self.uid)), record_id=self.rid))
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(self._body(ok)["id"], self.rid)
+        forbidden = asyncio.run(screen_api.api_record_detail(
+            FakeReq(_cookie_for(self.other_uid)), record_id=self.rid))
+        self.assertEqual(forbidden.status_code, 403)
+
+    def test_note_and_delete(self):
+        import asyncio
+        import screen_api
+        resp = asyncio.run(screen_api.api_record_note(
+            FakeReq(_cookie_for(self.uid), {"note": "复查通过"}),
+            record_id=self.rid))
+        self.assertEqual(self._body(resp), {"ok": True})
+        self.assertEqual(self.history.get_record(self.rid)["note"], "复查通过")
+        resp2 = asyncio.run(screen_api.api_record_delete(
+            FakeReq(_cookie_for(self.other_uid)), record_id=self.rid))
+        self.assertEqual(resp2.status_code, 403)
+        resp3 = asyncio.run(screen_api.api_record_delete(
+            FakeReq(_cookie_for(self.uid)), record_id=self.rid))
+        self.assertEqual(self._body(resp3), {"ok": True})
+        self.assertIsNone(self.history.get_record(self.rid))
+
+    def test_history_page_exists(self):
+        p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "assets", "screen", "history.html")
+        with open(p, encoding="utf-8") as f:
+            src = f.read()
+        for token in ("sc-subpage", "history.js"):
+            self.assertIn(token, src)
+
+
 if __name__ == "__main__":
     unittest.main()
