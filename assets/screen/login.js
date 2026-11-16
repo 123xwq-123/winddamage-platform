@@ -55,6 +55,18 @@
     }
   });
 
+  /* ── 密码显隐小眼睛 ── */
+  document.querySelectorAll(".pw-eye").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var input = document.getElementById(btn.dataset.target);
+      if (!input) return;
+      var show = input.type === "password";
+      input.type = show ? "text" : "password";
+      btn.classList.toggle("on", show);
+      btn.textContent = show ? "🙈" : "👁";
+    });
+  });
+
   /* ── 注册前端校验（服务端仍会完整复检） ── */
   $("#rg-form").addEventListener("submit", function (e) {
     var pw = $("#rg-pw").value, pw2 = $("#rg-pw2").value;
