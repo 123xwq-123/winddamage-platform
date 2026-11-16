@@ -46,6 +46,33 @@ class TestScreenGuard(unittest.TestCase):
         self.assertIn('"/screen/login?expired=1"', src)
         self.assertIn("include_router(screen_api.router)", src)
 
+    def test_login_page_no_redirect_loop(self):
+        """未登录访问 /screen/login 必须 200（回归：曾 302 成环）。"""
+        self.tmp = tempfile.mkdtemp()
+        os.environ["WD_DB_PATH"] = os.path.join(self.tmp, "h.db")
+        try:
+            import history
+            history.init_db()
+            auth.create_user("guardadmin", "Passw0rd1", role="admin")
+            from fastapi.testclient import TestClient
+            import server
+            with TestClient(server.create_app()) as client:
+                r = client.get("/screen/login")
+                self.assertEqual(r.status_code, 200)
+                self.assertIn('name="username"', r.text)
+                # 未登录 /screen → 302 登录页，且登录页不再二次跳转
+                r2 = client.get("/screen", follow_redirects=False)
+                self.assertEqual(r2.status_code, 302)
+                self.assertIn("/screen/login", r2.headers["location"])
+                r3 = client.get("/screen/login?expired=1")
+                self.assertEqual(r3.status_code, 200)
+                # 静态资源未登录也要放行（登录页样式依赖）
+                r4 = client.get("/screen-assets/screen.css")
+                self.assertEqual(r4.status_code, 200)
+        finally:
+            os.environ.pop("WD_DB_PATH", None)
+            shutil.rmtree(self.tmp, ignore_errors=True)
+
 
 class TestScreenLogin(unittest.TestCase):
     """大屏登录页契约：表单字段、POST 行为、共享样式文件。"""

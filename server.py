@@ -447,7 +447,11 @@ def create_app():
         # 大屏入口：API 未登录一律 401 JSON（供前端 fetch 判定），页面跳大屏登录页
         if path.startswith("/screen/api/"):
             return JSONResponse({"detail": "not authenticated"}, status_code=401)
+        if path.startswith("/screen-assets"):
+            return await _finish(request, call_next)   # 静态资源放行（登录页样式依赖）
         if path.startswith("/screen"):
+            if path == "/screen/login":
+                return await _finish(request, call_next)   # 登录页本身放行（防重定向环）
             next_url = "/screen/login?expired=1" if token else "/screen/login"
             return RedirectResponse(next_url, status_code=302)
         if path in _PROTECTED_EXACT or path.startswith("/history/"):
