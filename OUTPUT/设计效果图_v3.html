@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>智慧风电检测监管平台 · 设计效果图 v3</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1920px; height:1030px; overflow:hidden; font-family:"Microsoft YaHei","PingFang SC",sans-serif; }
+
+  /* ── 全屏 3D 场景底座：复现参考1 的白天写实山地风电场 ── */
+  .scene { position:absolute; inset:0;
+    background:linear-gradient(180deg,#2E6090 0%,#6FA0C4 26%,#B8D4E2 48%,#DCEBE8 58%,#C8DCC0 62%); }
+  .scene .sun { position:absolute; inset:0;
+    background:radial-gradient(46% 34% at 62% 28%, rgba(255,250,225,.5), transparent 68%); }
+  .scene svg.farm { position:absolute; inset:0; width:100%; height:100%; }
+
+  /* ── 顶栏 ── */
+  .topbar { position:absolute; top:0; left:0; right:0; height:64px; z-index:20;
+    display:flex; align-items:center; padding:0 28px;
+    background:linear-gradient(180deg, rgba(8,22,44,.92), rgba(8,22,44,.55) 80%, transparent); }
+  .logo { width:34px; height:34px; border-radius:8px; margin-right:12px;
+    background:linear-gradient(135deg,#06B6D4,#0E7490);
+    box-shadow:0 0 14px rgba(34,211,238,.5); display:flex; align-items:center; justify-content:center; }
+  .logo svg { width:20px; height:20px; }
+  .title { font-size:22px; font-weight:700; letter-spacing:4px; color:#EAF4FC; }
+  .title small { font-size:11px; letter-spacing:2px; color:#7E9CBE; margin-left:10px; font-weight:400; }
+  .top-right { margin-left:auto; display:flex; align-items:center; gap:22px; color:#CFE2F2; font-size:14px; }
+  .clock { font-size:18px; color:#EAF4FC; letter-spacing:1px; }
+  .clock small { display:block; font-size:11px; color:#7E9CBE; text-align:right; }
+  .avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#22D3EE,#0E7490);
+    display:inline-flex; align-items:center; justify-content:center; color:#04121F; font-weight:700; margin-right:8px; }
+  .round-btn { width:40px; height:40px; border-radius:50%; border:1px solid rgba(103,232,249,.5);
+    background:rgba(10,28,54,.66); color:#22D3EE; display:flex; align-items:center; justify-content:center;
+    font-size:17px; box-shadow:0 0 10px rgba(34,211,238,.2); }
+
+  /* ── 通用面板（深蓝半透明，压在亮场景上，同参考1） ── */
+  .panel { position:relative; background:linear-gradient(158deg, rgba(10,30,56,.66), rgba(7,20,40,.6));
+    border:1px solid rgba(103,232,249,.28); border-radius:6px; padding:14px 16px;
+    box-shadow:0 8px 28px rgba(4,16,34,.4); backdrop-filter:blur(3px); }
+  .panel::before,.panel::after { content:""; position:absolute; width:14px; height:14px; pointer-events:none; }
+  .panel::before { top:0; left:0; border-top:2px solid #06B6D4; border-left:2px solid #06B6D4; }
+  .panel::after { bottom:0; right:0; border-bottom:2px solid #06B6D4; border-right:2px solid #06B6D4; }
+  .ph { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .ph .sq { width:8px; height:8px; background:#06B6D4; box-shadow:0 0 8px rgba(34,211,238,.8); }
+  .ph .cn { font-size:15px; font-weight:700; color:#EAF4FC; letter-spacing:2px; }
+  .ph .en { font-size:10px; color:#7E9CBE; letter-spacing:1px; margin-left:auto; }
+
+  /* ── 左右列（几何完全对称：同 top/bottom + 末位面板 flex:1 → 等长） ── */
+  .col-left, .col-right { position:absolute; top:76px; bottom:96px; z-index:10;
+    display:flex; flex-direction:column; gap:14px; }
+  .col-left { left:22px; width:340px; }
+  .col-right { right:22px; width:340px; }
+  .col-right .panel:last-child { flex:1; }
+  /* 上传面板弹性拉大，图片信息面板收缩为内容高（两列底边仍等齐） */
+  .col-left .panel:nth-child(2) { flex:1; display:flex; flex-direction:column; }
+
+  .gauge-wrap { display:flex; align-items:center; gap:16px; }
+  .gauge { position:relative; width:120px; height:120px; flex:none; }
+  .gauge .val { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .gauge .val b { font-size:26px; color:#22D3EE; }
+  .gauge .val span { font-size:10px; color:#7E9CBE; letter-spacing:1px; }
+  .kbars { flex:1; display:flex; flex-direction:column; gap:11px; }
+  .krow .kt { display:flex; justify-content:space-between; font-size:12px; color:#CFE2F2; margin-bottom:4px; }
+  .krow .kt b { color:#EAF4FC; font-size:13px; }
+  .kbar { height:6px; background:rgba(103,232,249,.14); border-radius:3px; overflow:hidden; }
+  .kbar i { display:block; height:100%; border-radius:3px;
+    background:linear-gradient(90deg,#0E7490,#22D3EE); box-shadow:0 0 8px rgba(34,211,238,.6); }
+
+  .drop { border:1px dashed rgba(103,232,249,.5); border-radius:6px; flex:1; min-height:150px; margin-bottom:2px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    background:rgba(34,211,238,.06); color:#CFE2F2; font-size:13px; }
+  .drop .up { width:34px; height:34px; border-radius:50%; border:1px solid rgba(103,232,249,.55);
+    display:flex; align-items:center; justify-content:center; color:#22D3EE; font-size:18px; }
+
+  .info { display:grid; grid-template-columns:88px 1fr; row-gap:10px; font-size:13px; align-content:start; }
+  .info .k { color:#7E9CBE; } .info .v { color:#EAF4FC; }
+
+  .risk { display:flex; gap:10px; margin-bottom:12px; }
+  .risk .cell { flex:1; text-align:center; padding:9px 0 7px; border-radius:5px;
+    background:rgba(103,232,249,.08); border:1px solid rgba(103,232,249,.18); }
+  .risk .cell b { display:block; font-size:16px; }
+  .risk .cell span { font-size:11px; color:#7E9CBE; }
+  .risk .hi b { color:#F87171; } .risk .mid b { color:#FBBF24; } .risk .ok b { color:#34D399; }
+  .kv { display:grid; grid-template-columns:92px 1fr; row-gap:8px; font-size:13px; align-content:start; }
+  .kv .k { color:#7E9CBE; } .kv .v { color:#EAF4FC; }
+  .kv .v.cyan { color:#22D3EE; }
+
+  .loc-row { display:flex; align-items:center; gap:10px; padding:8px 10px; font-size:13px;
+    border:1px solid rgba(103,232,249,.16); border-radius:5px; margin-bottom:8px; background:rgba(14,36,64,.42); }
+  .dot { width:8px; height:8px; border-radius:50%; flex:none; }
+  .dot.red { background:#F87171; box-shadow:0 0 8px #F87171; }
+  .dot.ye { background:#FBBF24; box-shadow:0 0 8px #FBBF24; }
+  .loc-row .p { color:#EAF4FC; width:86px; } .loc-row .t { color:#CFE2F2; flex:1; }
+  .loc-row .c { color:#22D3EE; }
+
+  table.mini { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.mini th { color:#7E9CBE; font-weight:400; text-align:left; padding:4px 6px; border-bottom:1px solid rgba(103,232,249,.2); }
+  table.mini td { color:#EAF4FC; padding:6px; }
+  table.mini tr:nth-child(even) td { background:rgba(14,36,64,.45); }
+  .badge { font-size:11px; padding:1px 8px; border-radius:9px; }
+  .badge.hi { color:#F87171; border:1px solid rgba(248,113,113,.5); background:rgba(248,113,113,.1); }
+  .badge.ok { color:#34D399; border:1px solid rgba(52,211,153,.5); background:rgba(52,211,153,.1); }
+
+  /* ── 底部按钮排 ── */
+  .btnbar { position:absolute; bottom:26px; left:50%; transform:translateX(-50%); z-index:20;
+    display:flex; gap:16px; align-items:center; }
+  .btn { height:42px; padding:0 30px; border-radius:21px; border:1px solid rgba(103,232,249,.55);
+    background:rgba(10,28,54,.7); color:#EAF4FC; font-size:15px; letter-spacing:2px;
+    display:flex; align-items:center; gap:8px; }
+  .btn.primary { background:linear-gradient(135deg,#0E7490,#22D3EE); color:#fff; font-weight:700;
+    border-color:rgba(103,232,249,.75); box-shadow:0 0 18px rgba(34,211,238,.6); }
+
+  /* ── 场景浮动标签（同参考1：深蓝牌 + 青描边 + 引线） ── */
+  .tag { position:absolute; z-index:8; font-size:12px; color:#EAF4FC; letter-spacing:1px;
+    background:rgba(8,22,44,.85); border:1px solid rgba(103,232,249,.55); padding:4px 10px; border-radius:3px; }
+  .tag small { color:#7E9CBE; margin-left:6px; }
+  .tag.red { border-color:rgba(248,113,113,.7); color:#FECACA; }
+  .tag.red small { color:#F87171; }
+  .lead { position:absolute; z-index:7; }
+  .dmg { position:absolute; z-index:9; width:14px; height:14px; border-radius:50%;
+    background:rgba(248,113,113,.25); border:2px solid #F87171; box-shadow:0 0 12px #F87171; }
+  .dmg::after { content:""; position:absolute; inset:3px; border-radius:50%; background:#F87171; }
+
+  .scenehint { position:absolute; right:26px; bottom:30px; z-index:10; display:flex; flex-direction:column; gap:10px; }
+</style>
+</head>
+<body>
+
+<!-- 3D 场景底座：白天写实山地风电场（复现参考1） -->
+<div class="scene">
+  <div class="sun"></div>
+  <svg class="farm" viewBox="0 0 1920 1030" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#2E6090"/><stop offset=".45" stop-color="#8FB8D4"/><stop offset="1" stop-color="#D8E8EA"/>
+      </linearGradient>
+      <linearGradient id="peakFar" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#9CB4B4"/><stop offset="1" stop-color="#C6D6D0"/>
+      </linearGradient>
+      <linearGradient id="peakMain" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#CDD3C0"/><stop offset=".4" stop-color="#9AAA8E"/><stop offset="1" stop-color="#5E8062"/>
+      </linearGradient>
+      <linearGradient id="peakShade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#71857A" stop-opacity=".8"/><stop offset="1" stop-color="#4A6A52" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="hill1" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#72A45A"/><stop offset="1" stop-color="#4E7E42"/>
+      </linearGradient>
+      <linearGradient id="hill2" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#5E9050"/><stop offset="1" stop-color="#3E6C38"/>
+      </linearGradient>
+      <linearGradient id="valley" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#8CBE60"/><stop offset=".5" stop-color="#6CA84C"/><stop offset="1" stop-color="#4E8A3C"/>
+      </linearGradient>
+      <linearGradient id="hazeG" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#DCEBE8" stop-opacity="0"/><stop offset="1" stop-color="#DCEBE8" stop-opacity=".65"/>
+      </linearGradient>
+      <linearGradient id="towerG" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#C2CED6"/><stop offset=".5" stop-color="#F6FAFC"/><stop offset="1" stop-color="#AEBECA"/>
+      </linearGradient>
+      <filter id="blur6"><feGaussianBlur stdDeviation="6"/></filter>
+      <filter id="blur14"><feGaussianBlur stdDeviation="14"/></filter>
+      <!-- 岩体噪声纹理 -->
+      <filter id="rockTex" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.05 0.11" numOctaves="5" seed="8"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 0.16  0 0 0 0 0.24  0 0 0 0 0.15  0 0 0 0.55 0"/>
+      </filter>
+      <!-- 草地噪声纹理 -->
+      <filter id="grassTex" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.03 0.05" numOctaves="4" seed="3"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 0.93  0 0 0 0 1  0 0 0 0 0.72  0 0 0 0.22 0"/>
+      </filter>
+      <clipPath id="clipPeaks">
+        <path d="M0,470 L120,330 210,405 330,240 430,370 540,290 660,420 780,262 900,400 1020,300 1140,415 1270,270 1390,388 1510,305 1640,412 1760,330 1860,405 1920,365 1920,620 0,620 Z"/>
+      </clipPath>
+      <clipPath id="clipValley"><rect x="0" y="612" width="1920" height="418"/></clipPath>
+      <g id="wt">
+        <rect x="-5" y="-260" width="10" height="260" rx="4" fill="url(#towerG)"/>
+        <ellipse cx="0" cy="2" rx="18" ry="5" fill="#33511F" opacity=".4"/>
+        <g transform="translate(0,-260)">
+          <circle r="9" fill="#EAF1F5"/>
+          <g transform="rotate(24)">
+            <path d="M0,0 L4.5,-4.5 2.4,-124 -2.4,-124 Z" fill="#FBFDFE"/>
+            <path d="M0,0 L4.5,-4.5 2.4,-124 -2.4,-124 Z" fill="#FBFDFE" transform="rotate(120)"/>
+            <path d="M0,0 L4.5,-4.5 2.4,-124 -2.4,-124 Z" fill="#FBFDFE" transform="rotate(240)"/>
+          </g>
+          <circle r="3.5" fill="#C2CED6"/>
+        </g>
+      </g>
+      <!-- 输电塔（格构式，双横担） -->
+      <g id="pylon" fill="#4E5E56">
+        <path d="M-9,0 L-2.5,-52 L2.5,-52 L9,0 Z"/>
+        <path d="M-2.5,-52 L-6,-62 L6,-62 L2.5,-52 Z"/>
+        <rect x="-13" y="-61" width="26" height="2.4"/>
+        <rect x="-9" y="-55.5" width="18" height="2"/>
+        <rect x="-1.5" y="-67" width="3" height="6"/>
+      </g>
+      <!-- 树丛 -->
+      <g id="trees">
+        <circle cx="0" cy="0" r="11" fill="#3A6630"/><circle cx="16" cy="6" r="9" fill="#447338"/>
+        <circle cx="-14" cy="7" r="8" fill="#345C2C"/><circle cx="30" cy="10" r="7" fill="#3A6630"/>
+        <circle cx="7" cy="13" r="6" fill="#2E5228"/>
+      </g>
+    </defs>
+
+    <!-- 天空 -->
+    <rect x="0" y="0" width="1920" height="640" fill="url(#sky)"/>
+
+    <!-- 云（柔焦） -->
+    <g fill="#FFFFFF" filter="url(#blur14)">
+      <g opacity=".9"><ellipse cx="430" cy="150" rx="150" ry="26"/><ellipse cx="530" cy="128" rx="100" ry="22"/><ellipse cx="340" cy="130" rx="80" ry="18"/></g>
+      <g opacity=".8"><ellipse cx="1450" cy="115" rx="170" ry="26"/><ellipse cx="1340" cy="140" rx="90" ry="18"/><ellipse cx="1580" cy="140" rx="80" ry="16"/></g>
+      <g opacity=".65"><ellipse cx="980" cy="90" rx="120" ry="20"/></g>
+      <g opacity=".5"><ellipse cx="120" cy="230" rx="110" ry="18"/><ellipse cx="1850" cy="250" rx="100" ry="16"/></g>
+    </g>
+
+    <!-- 最远山：雾感青灰 -->
+    <path d="M0,420 L90,360 180,405 290,330 400,400 520,318 640,398 760,322 880,396 1010,326 1130,398 1260,330 1380,400 1500,335 1620,398 1740,345 1850,400 1920,360 1920,560 0,560 Z" fill="url(#peakFar)" opacity=".85"/>
+
+    <!-- 主山脉：岩石山峰 -->
+    <path d="M0,470 L120,330 210,405 330,240 430,370 540,290 660,420 780,262 900,400 1020,300 1140,415 1270,270 1390,388 1510,305 1640,412 1760,330 1860,405 1920,365 1920,620 0,620 Z" fill="url(#peakMain)"/>
+    <!-- 岩体噪声纹理 -->
+    <rect x="0" y="220" width="1920" height="400" clip-path="url(#clipPeaks)" filter="url(#rockTex)" opacity=".5"/>
+    <!-- 背光面 -->
+    <path d="M330,240 L430,370 390,372 300,300 Z M780,262 L900,400 850,398 720,330 Z M1270,270 L1390,388 1340,386 1215,330 Z" fill="url(#peakShade)"/>
+    <!-- 山脊高光/残雪 -->
+    <path d="M330,240 L372,300 352,296 322,268 Z M780,262 L822,322 800,318 770,288 Z M1270,270 L1312,330 1290,326 1258,296 Z" fill="#EEF2E8" opacity=".9"/>
+
+    <!-- 山脚大气雾带 -->
+    <rect x="0" y="400" width="1920" height="180" fill="url(#hazeG)"/>
+
+    <!-- 绿色山麓（两层） -->
+    <path d="M0,520 L160,462 330,512 520,452 710,515 900,458 1090,516 1290,455 1480,514 1680,460 1860,512 1920,478 1920,660 0,660 Z" fill="url(#hill1)"/>
+    <path d="M0,580 L200,540 420,578 640,536 860,580 1080,540 1300,580 1520,542 1740,580 1920,548 1920,700 0,700 Z" fill="url(#hill2)"/>
+
+    <!-- 山谷底：阳光草地 -->
+    <rect x="0" y="612" width="1920" height="418" fill="url(#valley)"/>
+    <rect x="0" y="612" width="1920" height="418" clip-path="url(#clipValley)" filter="url(#grassTex)" opacity=".8"/>
+    <!-- 田地色块（谷地 farm patch） -->
+    <g opacity=".5">
+      <path d="M120,700 L340,672 400,730 180,762 Z" fill="#B8D878"/>
+      <path d="M1450,690 L1680,670 1760,730 1520,756 Z" fill="#7EB052"/>
+      <path d="M300,880 L560,850 640,930 380,960 Z" fill="#95C464"/>
+      <path d="M1350,880 L1620,856 1700,940 1430,962 Z" fill="#B8D878"/>
+      <path d="M760,960 L1020,940 1080,1010 820,1030 Z" fill="#7EB052"/>
+    </g>
+    <!-- 树丛点缀 -->
+    <use href="#trees" transform="translate(240,668) scale(1.2)"/>
+    <use href="#trees" transform="translate(700,642)"/>
+    <use href="#trees" transform="translate(1500,672) scale(1.15)"/>
+    <use href="#trees" transform="translate(1800,730)"/>
+    <use href="#trees" transform="translate(120,850) scale(1.3)"/>
+    <use href="#trees" transform="translate(1760,900) scale(1.2)"/>
+    <use href="#trees" transform="translate(480,990) scale(1.1)"/>
+
+    <!-- 盘山/谷底道路（浅土色蜿蜒） -->
+    <path d="M180,1030 C300,940 420,880 560,830 700,780 820,760 960,748" fill="none" stroke="#D8CFA4" stroke-width="16" stroke-linecap="round" opacity=".9"/>
+    <path d="M960,748 C1090,740 1200,720 1300,688 1380,662 1440,640 1490,620" fill="none" stroke="#D8CFA4" stroke-width="12" stroke-linecap="round" opacity=".9"/>
+    <path d="M620,1030 C700,960 800,900 920,856" fill="none" stroke="#CDBF92" stroke-width="10" stroke-linecap="round" opacity=".8"/>
+
+    <!-- 升压站（谷地建筑群） -->
+    <g transform="translate(1310,600)">
+      <rect x="-70" y="-6" width="150" height="34" rx="3" fill="#B8BCC0"/>
+      <rect x="-60" y="-2" width="46" height="22" fill="#E8EAEC"/>
+      <rect x="-6" y="-2" width="52" height="22" fill="#DDE0E3"/>
+      <rect x="52" y="-2" width="24" height="22" fill="#E8EAEC"/>
+      <rect x="-64" y="-2" width="46" height="6" fill="#9AA4AC"/>
+      <rect x="-10" y="-2" width="52" height="6" fill="#9AA4AC"/>
+      <rect x="-40" y="28" width="90" height="10" rx="2" fill="#8A949C"/>
+    </g>
+
+    <!-- 输电塔群（沿道路，导线相连） -->
+    <use href="#pylon" transform="translate(1185,588) scale(.95)"/>
+    <use href="#pylon" transform="translate(1065,645) scale(1.1)"/>
+    <use href="#pylon" transform="translate(935,705) scale(1.25)"/>
+    <path d="M1185,530 C1140,555 1100,580 1065,588 M1065,583 C1020,608 975,640 935,648" fill="none" stroke="#4E5E56" stroke-width="1.4" opacity=".7"/>
+
+    <!-- 山麓远处风机群 -->
+    <g opacity=".95">
+      <use href="#wt" transform="translate(330,568) scale(.3)"/>
+      <use href="#wt" transform="translate(560,548) scale(.24)"/>
+      <use href="#wt" transform="translate(1650,560) scale(.27)"/>
+      <use href="#wt" transform="translate(1490,548) scale(.21)"/>
+      <use href="#wt" transform="translate(1800,575) scale(.18)"/>
+    </g>
+
+    <!-- 主角风机（居中单台，参考1 前景大风机造型） -->
+    <g transform="translate(960,858) scale(1.72)">
+      <ellipse cx="26" cy="8" rx="120" ry="16" fill="#3A5A22" opacity=".28" transform="skewX(-38)"/>
+      <ellipse cx="0" cy="4" rx="48" ry="13" fill="#33511F" opacity=".5"/>
+      <rect x="-11" y="-290" width="22" height="290" rx="8" fill="url(#towerG)"/>
+      <rect x="-15" y="-15" width="30" height="17" rx="3" fill="#D5DEE5"/>
+      <g transform="translate(0,-290)">
+        <rect x="-16" y="-15" width="44" height="27" rx="7" fill="#F2F7FA"/>
+        <circle r="15" fill="#EAF1F5"/>
+        <g transform="rotate(32)">
+          <path d="M0,0 L7,-7 3.6,-160 -3.6,-160 Z" fill="#FBFDFE"/>
+          <path d="M0,0 L7,-7 3.6,-160 -3.6,-160 Z" fill="#FBFDFE" transform="rotate(120)"/>
+          <path d="M0,0 L7,-7 3.6,-160 -3.6,-160 Z" fill="#FBFDFE" transform="rotate(240)"/>
+        </g>
+        <circle r="6" fill="#C2CED6"/>
+      </g>
+    </g>
+  </svg>
+</div>
+
+<!-- 浮动标签 + 损伤标记（锚定主角风机 / 升压站，同参考1 的 G101K 标签语言） -->
+<div class="tag" style="left:47.5%; top:16%;">3# 风机<small>WT-03 · 运行中</small></div>
+<svg class="lead" style="left:49.9%; top:19.5%;" width="2" height="40"><line x1="1" y1="0" x2="1" y2="40" stroke="rgba(103,232,249,.7)" stroke-width="1.5"/></svg>
+<div class="dmg" style="left:52.2%; top:26.8%;"></div>
+<div class="tag red" style="left:53.8%; top:24.9%;">损伤点 · 叶片根部<small>12.4m 裂纹</small></div>
+<svg class="lead" style="left:49.9%; top:37%;" width="2" height="40"><line x1="1" y1="0" x2="1" y2="40" stroke="rgba(103,232,249,.65)" stroke-width="1.5"/></svg>
+<div class="tag" style="left:46.6%; top:42.5%;">机舱<small>温度 41.2℃ · 转速 12.8 rpm</small></div>
+<div class="tag" style="left:63.5%; top:53.5%;">升压站<small>SS-01</small></div>
+<svg class="lead" style="left:66.9%; top:56.5%;" width="2" height="30"><line x1="1" y1="0" x2="1" y2="30" stroke="rgba(103,232,249,.6)" stroke-width="1.5"/></svg>
+
+<!-- 顶栏 -->
+<div class="topbar">
+  <div class="logo"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2 L14 9 21 12 14 15 12 22 10 15 3 12 10 9 Z" fill="#04121F"/></svg></div>
+  <div class="title">智慧风电检测监管平台<small>WIND POWER INSPECTION PLATFORM</small></div>
+  <div class="top-right">
+    <div class="clock">10:22:36<small>2026/11/16 星期一</small></div>
+    <div style="display:flex;align-items:center;"><span class="avatar">管</span>123456789 · 管理员</div>
+    <div class="round-btn">⇧</div>
+    <div class="round-btn">✕</div>
+  </div>
+</div>
+
+<!-- 左列 -->
+<div class="col-left">
+  <div class="panel">
+    <div class="ph"><span class="sq"></span><span class="cn">检测总览</span><span class="en">INSPECTION OVERVIEW</span></div>
+    <div class="gauge-wrap">
+      <div class="gauge">
+        <svg width="120" height="120" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(103,232,249,.14)" stroke-width="10"/>
+          <circle cx="60" cy="60" r="50" fill="none" stroke="#22D3EE" stroke-width="10" stroke-linecap="round"
+            stroke-dasharray="283 314" transform="rotate(-90 60 60)" style="filter:drop-shadow(0 0 6px rgba(34,211,238,.8))"/>
+          <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(103,232,249,.12)" stroke-width="2" stroke-dasharray="4 5"/>
+        </svg>
+        <div class="val"><b>90%</b><span>巡检完成度</span></div>
+      </div>
+      <div class="kbars">
+        <div class="krow"><div class="kt"><span>累计巡检</span><b>128 台</b></div><div class="kbar"><i style="width:86%"></i></div></div>
+        <div class="krow"><div class="kt"><span>本周检测</span><b>23 次</b></div><div class="kbar"><i style="width:52%"></i></div></div>
+        <div class="krow"><div class="kt"><span>高风险机组</span><b>3 台</b></div><div class="kbar"><i style="width:14%;background:linear-gradient(90deg,#B91C1C,#F87171)"></i></div></div>
+        <div class="krow"><div class="kt"><span>待复检</span><b>6 台</b></div><div class="kbar"><i style="width:22%;background:linear-gradient(90deg,#B45309,#FBBF24)"></i></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><span class="sq"></span><span class="cn">巡检图片上传</span><span class="en">UPLOAD</span></div>
+    <div class="drop"><div class="up">↑</div>拖拽图片至此处，或点击选择<div style="font-size:11px;color:#7E9CBE;">支持 JPG / PNG · 叶片 / 塔筒 / 机舱巡检图</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><span class="sq"></span><span class="cn">图片信息</span><span class="en">IMAGE INFO</span></div>
+    <div class="info">
+      <span class="k">文件名</span><span class="v">blade_ins_0347.jpg</span>
+      <span class="k">分辨率</span><span class="v">4032 × 3024</span>
+      <span class="k">文件大小</span><span class="v">4.6 MB · JPEG</span>
+      <span class="k">拍摄位置</span><span class="v">3# 风机 · 叶片根部</span>
+      <span class="k">采集设备</span><span class="v">DJI M300 + 云台相机</span>
+      <span class="k">采集时间</span><span class="v">2026-11-16 09:47</span>
+    </div>
+  </div>
+</div>
+
+<!-- 右列：完整检测报告 -->
+<div class="col-right">
+  <div class="panel">
+    <div class="ph"><span class="sq"></span><span class="cn">检测报告</span><span class="en">FULL REPORT</span></div>
+    <div class="risk">
+      <div class="cell hi"><b>高风险</b><span>风险等级</span></div>
+      <div class="cell mid"><b>裂纹</b><span>损伤类型</span></div>
+      <div class="cell ok"><b>92.5%</b><span>模型置信度</span></div>
+    </div>
+    <div class="kv">
+      <span class="k">损伤构件</span><span class="v cyan">叶片 · 根部段</span>
+      <span class="k">分布位置</span><span class="v">迎风面 距根部 12.4 m</span>
+      <span class="k">损伤尺寸</span><span class="v">横向裂纹 约 0.8 m</span>
+      <span class="k">建议措施</span><span class="v">72 小时内停机复检</span>
+      <span class="k">分析模型</span><span class="v">多模态大模型 v3</span>
+      <span class="k">检测时间</span><span class="v">2026-11-16 09:47:12</span>
+      <span class="k">报告编号</span><span class="v">RPT-20261116-0347</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><span class="sq"></span><span class="cn">损伤定位</span><span class="en">DAMAGE LOCATOR</span></div>
+    <div class="loc-row"><span class="dot red"></span><span class="p">叶片根部</span><span class="t">横向裂纹 约 0.8 m</span><span class="c">0.93</span></div>
+    <div class="loc-row"><span class="dot ye"></span><span class="p">叶片中部</span><span class="t">表面磨损 轻度</span><span class="c">0.71</span></div>
+    <div class="loc-row"><span class="dot ye"></span><span class="p">塔筒法兰</span><span class="t">防腐涂层脱落</span><span class="c">0.64</span></div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><span class="sq"></span><span class="cn">历史快查</span><span class="en">RECENT</span></div>
+    <table class="mini">
+      <tr><th>时间</th><th>机组</th><th>结论</th><th>风险</th></tr>
+      <tr><td>11-16 09:47</td><td>WT-03</td><td>叶片裂纹</td><td><span class="badge hi">高</span></td></tr>
+      <tr><td>11-15 15:12</td><td>WT-07</td><td>涂层脱落</td><td><span class="badge ok">低</span></td></tr>
+      <tr><td>11-15 10:03</td><td>WT-12</td><td>螺栓松动</td><td><span class="badge ok">低</span></td></tr>
+      <tr><td>11-14 16:40</td><td>WT-05</td><td>表面磨损</td><td><span class="badge ok">低</span></td></tr>
+      <tr><td>11-14 10:22</td><td>WT-09</td><td>机舱渗油</td><td><span class="badge ok">低</span></td></tr>
+      <tr><td>11-13 14:05</td><td>WT-02</td><td>叶片裂纹</td><td><span class="badge hi">高</span></td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- 右下圆形控制 -->
+<div class="scenehint">
+  <div class="round-btn">⛶</div>
+  <div class="round-btn">☀</div>
+  <div class="round-btn">◉</div>
+</div>
+
+<!-- 底部按钮排 -->
+<div class="btnbar">
+  <div class="btn primary">🔍 开始分析</div>
+  <div class="btn">清空</div>
+  <div class="btn">导出报告</div>
+  <div class="btn">批量检测</div>
+  <div class="btn">历史记录</div>
+</div>
+
+</body>
+</html>

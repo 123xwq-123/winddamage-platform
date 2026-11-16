@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>智慧风电检测监管平台 · 设计效果图</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1920px; height:1030px; overflow:hidden; font-family:"Microsoft YaHei","PingFang SC",sans-serif; }
+
+  /* ── 全屏 3D 场景底座（示意：天空渐变 + 地平线 + 网格） ── */
+  .scene { position:absolute; inset:0;
+    background:linear-gradient(180deg,#0A1B33 0%,#123055 38%,#1B4A38 72%,#16382A 100%); }
+  .scene .glow { position:absolute; inset:0;
+    background:radial-gradient(60% 45% at 50% 42%, rgba(56,189,248,.14), transparent 65%); }
+  .scene .grid { position:absolute; inset:0; opacity:.5;
+    background:repeating-linear-gradient(0deg, rgba(103,232,249,.04) 0 1px, transparent 1px 48px),
+               repeating-linear-gradient(90deg, rgba(103,232,249,.04) 0 1px, transparent 1px 48px); }
+
+  /* SVG 风机群（示意 3D 场景内容） */
+  .scene svg.farm { position:absolute; inset:0; width:100%; height:100%; }
+
+  /* ── 顶栏 ── */
+  .topbar { position:absolute; top:0; left:0; right:0; height:64px; z-index:20;
+    display:flex; align-items:center; padding:0 28px;
+    background:linear-gradient(180deg, rgba(6,18,34,.92), rgba(6,18,34,.55) 80%, transparent); }
+  .logo { width:34px; height:34px; border-radius:8px; margin-right:12px;
+    background:linear-gradient(135deg,#06B6D4,#0E7490);
+    box-shadow:0 0 14px rgba(34,211,238,.5); display:flex; align-items:center; justify-content:center; }
+  .logo svg { width:20px; height:20px; }
+  .title { font-size:22px; font-weight:700; letter-spacing:4px; color:#DCEBFA; }
+  .title small { font-size:11px; letter-spacing:2px; color:#6684A3; margin-left:10px; font-weight:400; }
+  .top-right { margin-left:auto; display:flex; align-items:center; gap:22px; color:#9FBEDA; font-size:14px; }
+  .clock { font-size:18px; color:#DCEBFA; letter-spacing:1px; }
+  .clock small { display:block; font-size:11px; color:#6684A3; text-align:right; }
+  .avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#22D3EE,#0E7490);
+    display:inline-flex; align-items:center; justify-content:center; color:#04121F; font-weight:700; margin-right:8px; }
+  .round-btn { width:40px; height:40px; border-radius:50%; border:1px solid rgba(103,232,249,.4);
+    background:rgba(10,28,50,.7); color:#22D3EE; display:flex; align-items:center; justify-content:center;
+    font-size:17px; box-shadow:0 0 10px rgba(34,211,238,.18); }
+
+  /* ── 通用面板 ── */
+  .panel { position:relative; background:linear-gradient(158deg, rgba(12,33,56,.82), rgba(8,22,40,.78));
+    border:1px solid rgba(103,232,249,.26); border-radius:6px; padding:14px 16px;
+    box-shadow:0 8px 28px rgba(2,10,22,.5); backdrop-filter:blur(4px); }
+  .panel::before,.panel::after { content:""; position:absolute; width:14px; height:14px; pointer-events:none; }
+  .panel::before { top:0; left:0; border-top:2px solid #06B6D4; border-left:2px solid #06B6D4; }
+  .panel::after { bottom:0; right:0; border-bottom:2px solid #06B6D4; border-right:2px solid #06B6D4; }
+  .ph { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .ph .sq { width:8px; height:8px; background:#06B6D4; box-shadow:0 0 8px rgba(34,211,238,.8); }
+  .ph .cn { font-size:15px; font-weight:700; color:#DCEBFA; letter-spacing:2px; }
+  .ph .en { font-size:10px; color:#6684A3; letter-spacing:1px; margin-left:auto; }
+
+  /* ── 左列 ── */
+  .col-left { position:absolute; top:76px; left:22px; bottom:96px; width:330px; z-index:10;
+    display:flex; flex-direction:column; gap:14px; }
+
+  /* 环形仪表 */
+  .gauge-wrap { display:flex; align-items:center; gap:16px; }
+  .gauge { position:relative; width:120px; height:120px; flex:none; }
+  .gauge .val { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .gauge .val b { font-size:26px; color:#22D3EE; }
+  .gauge .val span { font-size:10px; color:#6684A3; letter-spacing:1px; }
+  .kbars { flex:1; display:flex; flex-direction:column; gap:11px; }
+  .krow .kt { display:flex; justify-content:space-between; font-size:12px; color:#9FBEDA; margin-bottom:4px; }
+  .krow .kt b { color:#DCEBFA; font-size:13px; }
+  .kbar { height:6px; background:rgba(103,232,249,.12); border-radius:3px; overflow:hidden; }
+  .kbar i { display:block; height:100%; border-radius:3px;
+    background:linear-gradient(90deg,#0E7490,#22D3EE); box-shadow:0 0 8px rgba(34,211,238,.6); }
+
+  /* 上传面板 */
+  .drop { border:1px dashed rgba(103,232,249,.45); border-radius:6px; height:118px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+    background:rgba(34,211,238,.05); color:#9FBEDA; font-size:13px; }
+  .drop .up { width:34px; height:34px; border-radius:50%; border:1px solid rgba(103,232,249,.5);
+    display:flex; align-items:center; justify-content:center; color:#22D3EE; font-size:18px; }
+
+  /* 信息行 */
+  .info { display:grid; grid-template-columns:88px 1fr; row-gap:9px; font-size:13px; }
+  .info .k { color:#6684A3; } .info .v { color:#DCEBFA; }
+
+  /* ── 右列 ── */
+  .col-right { position:absolute; top:76px; right:22px; bottom:96px; width:348px; z-index:10;
+    display:flex; flex-direction:column; gap:14px; }
+  .risk { display:flex; gap:10px; margin-bottom:12px; }
+  .risk .cell { flex:1; text-align:center; padding:9px 0 7px; border-radius:5px;
+    background:rgba(103,232,249,.07); border:1px solid rgba(103,232,249,.16); }
+  .risk .cell b { display:block; font-size:16px; }
+  .risk .cell span { font-size:11px; color:#6684A3; }
+  .risk .hi b { color:#F87171; } .risk .mid b { color:#FBBF24; } .risk .ok b { color:#34D399; }
+  .kv { display:grid; grid-template-columns:92px 1fr; row-gap:8px; font-size:13px; }
+  .kv .k { color:#6684A3; } .kv .v { color:#DCEBFA; }
+  .kv .v.cyan { color:#22D3EE; }
+
+  .loc-row { display:flex; align-items:center; gap:10px; padding:8px 10px; font-size:13px;
+    border:1px solid rgba(103,232,249,.14); border-radius:5px; margin-bottom:8px; background:rgba(18,42,68,.35); }
+  .dot { width:8px; height:8px; border-radius:50%; flex:none; }
+  .dot.red { background:#F87171; box-shadow:0 0 8px #F87171; }
+  .dot.ye { background:#FBBF24; box-shadow:0 0 8px #FBBF24; }
+  .loc-row .p { color:#DCEBFA; width:86px; } .loc-row .t { color:#9FBEDA; flex:1; }
+  .loc-row .c { color:#22D3EE; }
+
+  table.mini { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.mini th { color:#6684A3; font-weight:400; text-align:left; padding:4px 6px; border-bottom:1px solid rgba(103,232,249,.18); }
+  table.mini td { color:#DCEBFA; padding:6px; }
+  table.mini tr:nth-child(even) td { background:rgba(18,42,68,.4); }
+  .badge { font-size:11px; padding:1px 8px; border-radius:9px; }
+  .badge.hi { color:#F87171; border:1px solid rgba(248,113,113,.5); background:rgba(248,113,113,.1); }
+  .badge.ok { color:#34D399; border:1px solid rgba(52,211,153,.5); background:rgba(52,211,153,.1); }
+
+  /* ── 底部按钮排 ── */
+  .btnbar { position:absolute; bottom:26px; left:50%; transform:translateX(-50%); z-index:20;
+    display:flex; gap:16px; align-items:center; }
+  .btn { height:42px; padding:0 30px; border-radius:21px; border:1px solid rgba(103,232,249,.5);
+    background:rgba(10,28,50,.75); color:#DCEBFA; font-size:15px; letter-spacing:2px;
+    display:flex; align-items:center; gap:8px; }
+  .btn.primary { background:linear-gradient(135deg,#0E7490,#22D3EE); color:#fff; font-weight:700;
+    border-color:rgba(103,232,249,.7); box-shadow:0 0 18px rgba(34,211,238,.55); }
+
+  /* ── 场景浮动标签（同参考1 的 G101K 引线标签） ── */
+  .tag { position:absolute; z-index:8; font-size:12px; color:#DCEBFA; letter-spacing:1px;
+    background:rgba(8,22,40,.82); border:1px solid rgba(103,232,249,.45); padding:4px 10px; border-radius:3px; }
+  .tag small { color:#6684A3; margin-left:6px; }
+  .lead { position:absolute; z-index:7; }
+  .dmg { position:absolute; z-index:9; width:14px; height:14px; border-radius:50%;
+    background:rgba(248,113,113,.25); border:2px solid #F87171; box-shadow:0 0 12px #F87171; }
+  .dmg::after { content:""; position:absolute; inset:3px; border-radius:50%; background:#F87171; }
+
+  .scenehint { position:absolute; right:26px; bottom:30px; z-index:10; display:flex; flex-direction:column; gap:10px; }
+</style>
+</head>
+<body>
+
+<!-- 3D 场景底座（示意） -->
+<div class="scene">
+  <div class="glow"></div>
+  <svg class="farm" viewBox="0 0 1920 1030" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <linearGradient id="tower" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#9FB8C8"/><stop offset=".5" stop-color="#E6EEF3"/><stop offset="1" stop-color="#8FA8B8"/>
+      </linearGradient>
+    </defs>
+    <!-- 远山 -->
+    <path d="M0,560 L140,470 300,545 470,455 640,560 830,480 1010,565 1200,470 1400,555 1600,485 1780,550 1920,500 1920,700 0,700 Z" fill="#16324A" opacity=".85"/>
+    <path d="M0,610 L200,545 420,615 660,550 900,620 1150,555 1400,625 1650,560 1920,615 1920,760 0,760 Z" fill="#12293E" opacity=".9"/>
+    <!-- 地面 -->
+    <rect x="0" y="640" width="1920" height="390" fill="#1E4632"/>
+    <path d="M0,640 C480,628 900,650 1920,636 L1920,700 0,700 Z" fill="#275540" opacity=".7"/>
+    <!-- 道路 -->
+    <path d="M880,1030 C920,900 990,790 1120,700 L1190,700 C1060,800 990,910 960,1030 Z" fill="#3A4A56" opacity=".8"/>
+    <!-- 远处风机 -->
+    <g opacity=".75">
+      <g transform="translate(1330,690) scale(.55)"><use href="#wt"/></g>
+      <g transform="translate(1520,700) scale(.45)"><use href="#wt"/></g>
+      <g transform="translate(240,700) scale(.42)"><use href="#wt"/></g>
+    </g>
+    <!-- 主角风机 -->
+    <g transform="translate(880,690) scale(1.05)"><use href="#wt"/></g>
+    <defs>
+      <g id="wt">
+        <rect x="-7" y="-300" width="14" height="300" rx="5" fill="url(#tower)"/>
+        <ellipse cx="0" cy="0" rx="26" ry="7" fill="#24422F" opacity=".5"/>
+        <g transform="translate(0,-300)">
+          <circle r="13" fill="#DCE6EC"/>
+          <g><path d="M0,0 L6,-6 3,-150 -3,-150 Z" fill="#F2F7FA"/><path d="M0,0 L6,-6 3,-150 -3,-150 Z" fill="#F2F7FA" transform="rotate(120)"/><path d="M0,0 L6,-6 3,-150 -3,-150 Z" fill="#F2F7FA" transform="rotate(240)"/></g>
+          <circle r="5" fill="#B8C9D4"/>
+        </g>
+      </g>
+    </defs>
+  </svg>
+  <div class="grid"></div>
+</div>
+
+<!-- 浮动标签 + 损伤标记 -->
+<div class="tag" style="left:63%; top:44%;">3# 风机<small>WT-03</small></div>
+<svg class="lead" style="left:63%; top:47.5%;" width="2" height="52"><line x1="1" y1="0" x2="1" y2="52" stroke="rgba(103,232,249,.6)" stroke-width="1.5"/></svg>
+<div class="tag" style="left:30%; top:38%;">升压站<small>SS-01</small></div>
+<div class="dmg" style="left:46.6%; top:38.5%;"></div>
+<div class="tag" style="left:47.8%; top:36.2%; border-color:rgba(248,113,113,.6);">损伤点 · 叶片根部<small>12.4m 裂纹</small></div>
+<svg class="lead" style="left:41%; top:52%;" width="2" height="40"><line x1="1" y1="0" x2="1" y2="40" stroke="rgba(103,232,249,.5)" stroke-width="1.5"/></svg>
+<div class="tag" style="left:38.5%; top:57.5%;">机舱<small>温度 41.2℃</small></div>
+
+<!-- 顶栏 -->
+<div class="topbar">
+  <div class="logo"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2 L14 9 21 12 14 15 12 22 10 15 3 12 10 9 Z" fill="#04121F"/></svg></div>
+  <div class="title">智慧风电检测监管平台<small>WIND POWER INSPECTION PLATFORM</small></div>
+  <div class="top-right">
+    <div class="clock">10:22:36<small>2026/11/16 星期一</small></div>
+    <div style="display:flex;align-items:center;"><span class="avatar">管</span>123456789 · 管理员</div>
+    <div class="round-btn">⇧</div>
+    <div class="round-btn">✕</div>
+  </div>
+</div>
+
+<!-- 左列 -->
+<div class="col-left">
+  <div class="panel">
+    <div class="ph"><span class="sq"></span><span class="cn">检测总览</span><span class="en">INSPECTION OVERVIEW</span></div>
+    <div class="gauge-wrap">
+      <div class="gauge">
+        <svg width="120" height="120" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(103,232,249,.12)" stroke-width="10"/>
+          <circle cx="60" cy="60" r="50" fill="none" stroke="#22D3EE" stroke-width="10" stroke-linecap="round"
+            stroke-dasharray="283 314" transform="rotate(-90 60 60)" style="filter:drop-shadow(0 0 6px rgba(34,211,238,.8))"/>
+          <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(103,232,249,.1)" stroke-width="2" stroke-dasharray="4 5"/>
+        </svg>
+        <div class="val"><b>90%</b><span>巡检完成度</span></div>
+      </div>
+      <div class="kbars">
+        <div class="krow"><div class="kt"><span>累计巡检</span><b>128 台</b></div><div class="kbar"><i style="width:86%"></i></div></div>
+        <div class="krow"><div class="kt"><span>本周检测</span><b>23 次</b></div><div class="kbar"><i style="width:52%"></i></div></div>
+        <div class="krow"><div class="kt"><span>高风险机组</span><b>3 台</b></div><div class="kbar"><i style="width:14%;background:linear-gradient(90deg,#B91C1C,#F87171)"></i></div></div>
+        <div class="krow"><div class="kt"><span>待复检</span><b>6 台</b></div><div class="kbar"><i style="width:22%;background:linear-gradient(90deg,#B45309,#FBBF24)"></i></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><span class="sq"></span><span class="cn">巡检图片上传</span><span class="en">UPLOAD</span></div>
+    <div class="drop"><div class="up">↑</div>拖拽图片至此处，或点击选择<div style="font-size:11px;color:#6684A3;">支持 JPG / PNG · 叶片 / 塔筒 / 机舱巡检图</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><span class="sq"></span><span class="cn">图片信息</span><span class="en">IMAGE INFO</span></div>
+    <div class="info">
+      <span class="k">文件名</span><span class="v">blade_ins_0347.jpg</span>
+      <span class="k">分辨率</span><span class="v">4032 × 3024</span>
+      <span class="k">拍摄位置</span><span class="v">3# 风机 · 叶片根部</span>
+      <span class="k">采集时间</span><span class="v">2026-11-16 09:47</span>
+    </div>
+  </div>
+</div>
+
+<!-- 右列 -->
+<div class="col-right">
+  <div class="panel">
+    <div class="ph"><span class="sq"></span><span class="cn">检测报告</span><span class="en">REPORT</span></div>
+    <div class="risk">
+      <div class="cell hi"><b>高风险</b><span>风险等级</span></div>
+      <div class="cell mid"><b>裂纹</b><span>损伤类型</span></div>
+      <div class="cell ok"><b>92.5%</b><span>模型置信度</span></div>
+    </div>
+    <div class="kv">
+      <span class="k">损伤构件</span><span class="v cyan">叶片 · 根部段</span>
+      <span class="k">分布位置</span><span class="v">迎风面 距根部 12.4 m</span>
+      <span class="k">建议措施</span><span class="v">72 小时内停机复检</span>
+      <span class="k">分析模型</span><span class="v">多模态大模型 v3</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><span class="sq"></span><span class="cn">损伤定位</span><span class="en">DAMAGE LOCATOR</span></div>
+    <div class="loc-row"><span class="dot red"></span><span class="p">叶片根部</span><span class="t">横向裂纹 约 0.8 m</span><span class="c">0.93</span></div>
+    <div class="loc-row"><span class="dot ye"></span><span class="p">叶片中部</span><span class="t">表面磨损 轻度</span><span class="c">0.71</span></div>
+    <div class="loc-row"><span class="dot ye"></span><span class="p">塔筒法兰</span><span class="t">防腐涂层脱落</span><span class="c">0.64</span></div>
+  </div>
+
+  <div class="panel" style="flex:1;">
+    <div class="ph"><span class="sq"></span><span class="cn">历史快查</span><span class="en">RECENT</span></div>
+    <table class="mini">
+      <tr><th>时间</th><th>机组</th><th>结论</th><th>风险</th></tr>
+      <tr><td>11-16 09:47</td><td>WT-03</td><td>叶片裂纹</td><td><span class="badge hi">高</span></td></tr>
+      <tr><td>11-15 15:12</td><td>WT-07</td><td>涂层脱落</td><td><span class="badge ok">低</span></td></tr>
+      <tr><td>11-15 10:03</td><td>WT-12</td><td>螺栓松动</td><td><span class="badge ok">低</span></td></tr>
+      <tr><td>11-14 16:40</td><td>WT-05</td><td>表面磨损</td><td><span class="badge ok">低</span></td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- 右下圆形控制（同参考1） -->
+<div class="scenehint">
+  <div class="round-btn">⛶</div>
+  <div class="round-btn">☀</div>
+  <div class="round-btn">◉</div>
+</div>
+
+<!-- 底部按钮排 -->
+<div class="btnbar">
+  <div class="btn primary">🔍 开始分析</div>
+  <div class="btn">清空</div>
+  <div class="btn">导出报告</div>
+  <div class="btn">批量检测</div>
+  <div class="btn">历史记录</div>
+</div>
+
+</body>
+</html>
