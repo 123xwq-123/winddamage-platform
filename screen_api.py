@@ -27,12 +27,49 @@ def _current_user(request: Request):
     return auth.user_for_request(request)
 
 
-# ─── 页面（骨架占位；Task 2-7 逐页充实） ──────────────────────
+# ─── 登录 ─────────────────────────────────────────────────────
+def _login_page_html(error: str = "") -> str:
+    err = f'<div class="sc-form-error">{error}</div>' if error else ""
+    return (
+        '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<title>登录 · 智慧风电检测监管平台</title>'
+        '<link rel="stylesheet" href="/screen-assets/screen.css"></head>'
+        '<body class="sc-page sc-login">'
+        '<div class="sc-login-box sc-panel">'
+        '<div class="sc-login-title">智慧风电检测监管平台</div>'
+        '<div class="sc-login-sub">WIND POWER INSPECTION PLATFORM</div>'
+        + err +
+        '<form method="post" action="/screen/login">'
+        '<label>账号<input name="username" autocomplete="username" required></label>'
+        '<label>密码<input name="password" type="password" autocomplete="current-password" required></label>'
+        '<button class="sc-btn primary" type="submit">登 录</button>'
+        '</form></div></body></html>')
+
+
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(error: str = ""):
-    return _page(f"<h1>screen login placeholder</h1><!-- {error} -->")
+    return _page(_login_page_html("账号或密码错误" if error else ""))
 
 
+@router.post("/login")
+async def login_submit(request: Request):
+    form = await request.form()
+    status, payload = auth.authenticate(str(form.get("username") or ""),
+                                        str(form.get("password") or ""))
+    if status == "ok":
+        resp = RedirectResponse("/screen", status_code=302)
+        resp.set_cookie(
+            auth.SESSION_COOKIE, auth.create_session(payload["id"]),
+            httponly=True, samesite="lax",
+            max_age=auth.SESSION_TTL_HOURS * 3600, path="/")
+        return resp
+    if status == "locked":
+        return _page(_login_page_html(f"尝试过多，已锁定，请 {payload} 分钟后重试"))
+    return _page(_login_page_html("账号或密码错误"))
+
+
+# ─── 页面（骨架占位；Task 4-7 逐页充实） ──────────────────────
 @router.get("/", response_class=HTMLResponse)
 async def home_page(request: Request):
     return _page("<h1>screen home placeholder</h1>")
