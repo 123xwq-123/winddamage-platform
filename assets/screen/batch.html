@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>批量检测 · 智慧风电检测监管平台</title>
+<link rel="stylesheet" href="/screen-assets/screen.css">
+<style>
+.sc-batch-wrap { display:flex; gap:14px; flex:1; min-height:0; }
+.sc-batch-left { flex:0 0 380px; display:flex; flex-direction:column; }
+.sc-batch-right { flex:1; display:flex; flex-direction:column; overflow:auto; }
+.sc-drop { min-height:220px; }
+.sc-filelist { max-height:140px; overflow:auto; font-size:12.5px; color:#CFE2F2; margin-top:10px;
+  border-top:1px dashed rgba(103,232,249,.25); padding-top:8px; }
+.sc-sumline { display:flex; gap:18px; margin-bottom:12px; }
+.sc-sumline[hidden] { display:none; }
+.sc-sumline .cell { flex:1; text-align:center; padding:12px 0; border-radius:6px;
+  background:rgba(103,232,249,.08); border:1px solid rgba(103,232,249,.18); }
+.sc-sumline .cell b { display:block; font-size:24px; color:#22D3EE; }
+.sc-sumline .cell.hi b { color:#F87171; }
+.sc-sumline .cell span { font-size:12px; color:#7E9CBE; }
+table.sc-mini td .err { color:#F87171; font-size:12px; }
+</style>
+</head>
+<body class="sc-page">
+
+<div id="sc-scene"><iframe src="/screen-assets/farm_viewer.html" title="3D风场" tabindex="-1"></iframe></div>
+
+<header class="sc-topbar">
+  <div class="sc-logo" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8">
+      <circle cx="12" cy="12" r="2.2" fill="#fff" stroke="none"/>
+      <path d="M12 9.8V3.2M14 13.2l5.6 3.2M10 13.2L4.4 16.4"/>
+    </svg>
+  </div>
+  <div class="sc-title">批量检测<small>BATCH INSPECTION</small></div>
+  <div class="sc-top-right">
+    <a class="sc-btn" href="/screen" style="height:36px;padding:0 18px;font-size:13px">← 返回大屏</a>
+  </div>
+</header>
+
+<div class="sc-subpage">
+  <div class="sc-batch-wrap">
+    <section class="sc-panel sc-batch-left">
+      <div class="sc-ph"><span class="sq"></span><span class="cn">上传图片</span><span class="en">FILES</span></div>
+      <div class="sc-drop" id="drop">
+        <div class="up">↑</div>
+        <div id="drop-text">拖拽多张巡检图片到此处<br>或点击选择文件</div>
+        <div class="hint">支持 JPG / PNG / WEBP，批量分析</div>
+        <input type="file" id="files" accept="image/*" multiple hidden>
+      </div>
+      <div class="sc-filelist" id="filelist" hidden></div>
+      <button class="sc-btn primary" id="run" disabled style="justify-content:center;margin-top:12px">▶ 开始批量分析</button>
+    </section>
+
+    <section class="sc-panel sc-batch-right">
+      <div class="sc-ph"><span class="sq"></span><span class="cn">分析结果</span><span class="en">RESULTS</span></div>
+      <div class="sc-sumline" id="sum" hidden>
+        <div class="cell"><b id="sum-total">0</b><span>总计</span></div>
+        <div class="cell"><b id="sum-ok">0</b><span>成功</span></div>
+        <div class="cell hi"><b id="sum-high">0</b><span>高风险</span></div>
+        <div class="cell"><b id="sum-fail">0</b><span>失败</span></div>
+      </div>
+      <div id="result" style="flex:1;overflow:auto">
+        <div class="sc-empty">等待上传并开始分析…</div>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:10px">
+        <button class="sc-btn" id="export" disabled style="height:36px;padding:0 20px;font-size:13px">⬇ 导出 CSV</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="/screen-assets/batch.js"></script>
+</body>
+</html>

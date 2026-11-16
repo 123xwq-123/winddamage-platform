@@ -302,5 +302,91 @@ class TestScreenRecordsApi(unittest.TestCase):
             self.assertIn(token, src)
 
 
+class TestScreenBatchApi(unittest.TestCase):
+    """批量检测 API 契约：逐张分析、归属、失败容错、汇总。"""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        os.environ["WD_DB_PATH"] = os.path.join(self.tmp, "h.db")
+        import history
+        history.init_db()
+        self.history = history
+        self.uid = auth.create_user("batchop", "Passw0rd1")
+
+    def tearDown(self):
+        os.environ.pop("WD_DB_PATH", None)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _req(self, uploads):
+        cookie = "wd_session=" + auth.create_session(self.uid)
+
+        class FakeForm:
+            def getlist(self_inner, key):
+                return uploads
+
+        class FakeUpload:
+            def __init__(self, name):
+                self.filename = name
+
+            async def read(self_inner):
+                return b"\x89PNG\r\n\x1a\n" + b"0" * 32   # PNG 魔数占位
+
+        class FakeRequest(FakeReq):
+            async def form(self_inner):
+                return FakeForm()
+
+        return FakeRequest(cookie)
+
+    @staticmethod
+    def _upload(name):
+        class U:
+            async def read(self_inner):
+                return b"\x89PNG\r\n\x1a\n" + b"0" * 32
+        U.filename = name
+        return U()
+
+    def test_batch_results_and_attribution(self):
+        import asyncio
+        from unittest import mock
+        import screen_api
+        normal = {"1. 构件识别": {"构件名称": "塔筒"},
+                  "2. 损伤判定": {"是否存在损伤": "否", "损伤类型": "无"},
+                  "6. 结论建议": {"巡检优先级": "低", "本次判断的置信度": "高"}}
+        seq = [(REPORT_HIGH, "{}", 0.5), (normal, "{}", 0.4),
+               (REPORT_HIGH, "{}", 0.6)]
+        def up(name):
+            return self._upload(name)
+
+        with mock.patch("app._do_inference", side_effect=lambda p: seq.pop(0)):
+            resp = asyncio.run(screen_api.api_batch(self._req(
+                [self._upload(f"img{i}.jpg") for i in range(3)])))
+        import json as _j
+        data = _j.loads(resp.body)
+        self.assertTrue(all(r["ok"] for r in data["results"]))
+        self.assertEqual(data["total"], 3)
+        self.assertEqual(data["high_risk"], 2)
+        ids = [r["record_id"] for r in data["results"]]
+        self.assertTrue(all(ids))
+        # 归属校验
+        rec = self.history.get_record(ids[0])
+        self.assertEqual(rec["owner_user_id"], self.uid)
+        self.assertEqual(rec["source"], "screen")
+
+    def test_batch_tolerates_failure(self):
+        import asyncio
+        from unittest import mock
+        import screen_api
+
+        def boom(path):
+            raise RuntimeError("model offline")
+
+        with mock.patch("app._do_inference", side_effect=boom):
+            resp = asyncio.run(screen_api.api_batch(self._req([self._upload("x.jpg")])))
+        import json as _j
+        data = _j.loads(resp.body)
+        self.assertFalse(data["results"][0]["ok"])
+        self.assertIn("model offline", data["results"][0]["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

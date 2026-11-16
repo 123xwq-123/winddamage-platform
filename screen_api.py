@@ -78,7 +78,8 @@ async def home_page(request: Request):
 
 @router.get("/batch", response_class=HTMLResponse)
 async def batch_page(request: Request):
-    return _page("<h1>screen batch placeholder</h1>")
+    with open(os.path.join(SCREEN_DIR, "batch.html"), encoding="utf-8") as f:
+        return _page(f.read())
 
 
 @router.get("/history", response_class=HTMLResponse)
@@ -230,6 +231,58 @@ async def api_records(request: Request, page: int = 1, page_size: int = 15,
         date_from=date_from.strip(), date_to=date_to.strip(), sort=sort.strip())
     return JSONResponse({"rows": [_row_item(r) for r in rows], "total": total,
                          "stats": history.get_stats(scope)})
+
+
+@router.post("/api/batch")
+async def api_batch(request: Request):
+    """批量分析：逐张推理+入库（失败不中断），返回逐行结果与汇总。
+
+    批量图片不持久化（persist_image=False）避免配额压力；详情可回看报告文本。
+    """
+    user = _current_user(request)
+    if not user:
+        return JSONResponse({"detail": "not authenticated"}, status_code=401)
+    form = await request.form()
+    uploads = [u for u in form.getlist("files") if getattr(u, "filename", "")]
+    if not uploads:
+        return JSONResponse({"detail": "no files"}, status_code=400)
+    from app import _do_inference
+    from parser import get_field
+    import i18n
+    scope, _ = _scope(user)
+    results, high = [], 0
+    tmpd = _tempfile.mkdtemp(prefix="scb_")
+    try:
+        for up in uploads:
+            name = os.path.basename(up.filename)
+            path = os.path.join(tmpd, name)
+            with open(path, "wb") as f:
+                f.write(await up.read())
+            try:
+                parsed, raw, infer_time = _do_inference(path)
+                if parsed is None:
+                    raise RuntimeError(str(raw)[:200] or "inference failed")
+                rid = history.save_record(name, parsed, infer_time, path,
+                                          source="screen", persist_image=False,
+                                          owner_user_id=user["id"],
+                                          created_by=user["username"])
+                is_high = bool(history.get_record(rid)["high_risk"])
+                high += 1 if is_high else 0
+                results.append({
+                    "ok": True, "filename": name, "record_id": rid,
+                    "component": get_field(parsed, i18n.SECTION_COMPONENT, "构件名称"),
+                    "damage_type": get_field(parsed, i18n.SECTION_DAMAGE, "损伤类型"),
+                    "priority": get_field(parsed, i18n.SECTION_CONCLUSION, "巡检优先级"),
+                    "high_risk": is_high, "infer_time": infer_time,
+                })
+            except Exception as exc:                       # 单张失败不影响整批
+                results.append({"ok": False, "filename": name,
+                                "record_id": None, "error": str(exc)[:300]})
+    finally:
+        _shutil.rmtree(tmpd, ignore_errors=True)
+    return JSONResponse({"results": results, "total": len(results),
+                         "ok_count": sum(1 for r in results if r["ok"]),
+                         "high_risk": high})
 
 
 @router.get("/api/records/{record_id}")
