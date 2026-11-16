@@ -22,6 +22,7 @@ import i18n
 from i18n import t as tr
 import ui_components as uc
 import auth
+import screen_api
 from history import get_record, can_access
 
 # app.py 顶部会依据 --lang/UI_LANG 设置语言；导入其构建函数
@@ -428,6 +429,9 @@ def create_app():
         # 已登录访问登录/注册页 → 回首页
         if path in ("/login", "/register") and user:
             return RedirectResponse("/", status_code=302)
+        # 已登录访问大屏登录页 → 回大屏
+        if path == "/screen/login" and user:
+            return RedirectResponse("/screen", status_code=302)
 
         if user:
             # admin-only 页面
@@ -440,6 +444,12 @@ def create_app():
             return JSONResponse({"detail": "not authenticated"}, status_code=401)
         if path == "/api/me":
             return JSONResponse({"username": None, "role": None})
+        # 大屏入口：API 未登录一律 401 JSON（供前端 fetch 判定），页面跳大屏登录页
+        if path.startswith("/screen/api/"):
+            return JSONResponse({"detail": "not authenticated"}, status_code=401)
+        if path.startswith("/screen"):
+            next_url = "/screen/login?expired=1" if token else "/screen/login"
+            return RedirectResponse(next_url, status_code=302)
         if path in _PROTECTED_EXACT or path.startswith("/history/"):
             # 有过期 Cookie 的带提示跳转（§10.3 过期告知）
             if token:
@@ -676,11 +686,22 @@ def create_app():
     # 后注册的精确路由会被它遮住。
     @fastapp.get("/wd-assets/base.css")
     async def wd_base_css():
+        # no-cache：样式随代码更新必须立刻生效（内容极小，重新验证成本可忽略）。
+        # 曾用 max-age=3600，用户浏览器在样式更新后最长 1 小时内仍是旧主题。
         return Response(uc.BASE_CSS, media_type="text/css",
-                        headers={"Cache-Control": "public, max-age=3600"})
+                        headers={"Cache-Control": "no-cache"})
 
     if os.path.isdir(assets_dir):
         fastapp.mount("/wd-assets", StaticFiles(directory=assets_dir), name="wd-assets")
+
+    # 新版大屏：/screen 路由 + /screen-assets 静态目录
+    # 必须注册在下方 gr.mount_gradio_app(path="/") 之前，否则被 "/" 前缀挂载遮住。
+    screen_assets = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "assets", "screen")
+    fastapp.include_router(screen_api.router)
+    if os.path.isdir(screen_assets):
+        fastapp.mount("/screen-assets", StaticFiles(directory=screen_assets),
+                      name="screen-assets")
 
     demo = app_module.build_ui()
     # 全局样式经 head 以 <style> 内联注入（Gradio 运行时用 DOMParser 重建
