@@ -1,0 +1,142 @@
+  0      jc=- flc=-  | 
+  1      jc=- flc=-  | 
+  2      jc=- flc=-  | 
+  3      jc=- flc=-  | 
+  4      jc=- flc=-  | 
+  5      jc=- flc=-  | 
+  6      jc=center flc=- sz=44 b=1 ea=SimSun ascii=Times New Roman | 风电塔灾损测算多模态大模型可视化软件
+  7      jc=center flc=- sz=36 b=1 ea=SimSun ascii=Times New Roman | 前 端 界 面 使 用 说 明 书
+  8      jc=- flc=-  | 
+  9      jc=- flc=-  | 
+ 10      jc=- flc=-  | 
+ 11      jc=- flc=-  | 
+ 12      jc=- flc=-  | 
+ 13      jc=- flc=-  | 
+ 14      jc=- flc=-  | 
+ 15      jc=- flc=-  | 
+ 16      jc=- flc=-  | 
+ 17      jc=- flc=-  | 
+ 18      jc=- flc=-  | 
+ 19      jc=- flc=-  | 
+ 20      jc=- flc=-  | 
+ 21      jc=center flc=- sz=28 b= ea=SimSun ascii=Times New Roman | 2026 年 11 月
+ 22      jc=- flc=- sz=- b= ea=SimSun ascii=Times New Roman | 
+ 23 H1   jc=- flc=- sz=28 b=1 ea=SimSun ascii=Times New Roman | 一、界面基本介绍
+ 24 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 1.1 软件与界面概览
+ 25      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 风电塔灾损测算多模态大模型可视化软件是一款面向风电塔结构巡检场景的损伤检测与评估工具。软件以视觉语言
+ 26      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 软件采用浏览器访问方式，启动服务后在浏览器中打开软件地址即可使用，无需安装客户端。主界面自上而下分为
+ 27      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 主界面提供三个功能选项卡，分别对应软件的三项核心功能：
+ 28 BUL  jc=both flc=- sz=24 b=0 ea=SimSun ascii=Times New Roman | 单图检测：上传单张巡检图像，获得完整的结构化损伤评估报告；
+ 29 BUL  jc=both flc=- sz=24 b=0 ea=SimSun ascii=Times New Roman | 批量检测：一次上传多张巡检图像，逐张分析并生成汇总表格，支持批量导出；
+ 30 BUL  jc=both flc=- sz=24 b=0 ea=SimSun ascii=Times New Roman | 历史记录：查看、筛选、追溯全部检测记录，管理报告导出任务，并进行统计分析。
+ 31 BUL IMG  jc=center flc=None sz=- b= ea=None ascii=None | 
+ 32 CAP  jc=center flc=- sz=21 b=0 ea=SimSun ascii=Times New Roman | 软件主界面概览
+ 33 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 1.2 登录与账户
+ 34 BUL  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 软件内置账户体系，打开软件地址后首先进入登录页面。首次部署时可在初始化页面创建管理员账户；新用户可通
+ 35 BUL  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 系统区分两种角色：管理员与普通用户。登录成功后，页面右上角显示当前用户信息行，包括用户名、角色徽章及
+ 36 BUL  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 普通用户：可使用单图检测、批量检测、历史记录三项核心功能，修改自己的密码，或退出登录；
+ 37 BUL  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 管理员：在普通用户功能基础上，额外提供“用户管理”入口，可管理全部账户。
+ 38 BUL IMG  jc=center flc=- sz=- b= ea=None ascii=None | 
+ 39 CAP  jc=center flc=- sz=21 b=0 ea=SimSun ascii=Times New Roman | 登录与注册页面
+ 40 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 1.3 单图检测页
+ 41      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 单图检测是软件的核心功能模块，页面左侧为操作区，右侧为结果展示区。操作流程如下：
+ 42 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 上传图片：点击上传区域选择本机巡检图像，或直接拖拽图片到上传框；页面显示图片尺寸信息；
+ 43 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 使用示例图片：页面内置多张示例图像，点击即可快速载入体验；
+ 44 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 开始分析：点击“开始分析”按钮启动检测。分析进行中，状态条显示旋转动效与实时已用时计时，便于掌握推理
+ 45 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 查看结果：分析完成后，右侧自动展示评估摘要与分栏详情，包括构件识别、损伤判定、风险影响分析、运维与处
+ 46 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 核对原始输出：展开“完整 JSON 报告”折叠面板，可查看模型输出的全部原始字段；
+ 47 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 导出报告：支持一键导出 Markdown 格式报告（适合阅读与归档）、JSON 格式报告（适合程序化
+ 48 NUM IMG  jc=center flc=200 sz=- b= ea=None ascii=None | 
+ 49 CAP  jc=center flc=- sz=21 b=0 ea=SimSun ascii=Times New Roman | 单图检测页面
+ 50 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 1.4 批量检测页
+ 51      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 批量检测面向多图巡检场景。用户一次性选择多张巡检图像，点击“开始批量分析”后，软件逐张完成推理并汇总
+ 52      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 批量分析完成后，可一键导出 CSV 表格（Excel 可直接打开，适合台账登记）或 Markdown
+ 53     IMG  jc=center flc=- sz=- b= ea=None ascii=None | 
+ 54 CAP  jc=center flc=- sz=21 b=0 ea=SimSun ascii=Times New Roman | 批量检测页面
+ 55 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 1.5 历史记录页
+ 56      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 每次检测的结果自动保存到本地数据库，历史记录页提供完整的记录管理与统计功能。
+ 57      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | （1）记录筛选：支持按关键词模糊搜索、按风险状态（高/正常）过滤；起止日期通过原生日期选择控件设置，
+ 58      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | （2）统计图表：页面内置统计图表面板，以损伤类型分布饼图、巡检优先级分布柱状图、检测数量趋势折线图三
+ 59      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | （3）详情查看与记录删除：通过下拉框选择某条历史记录后，可查看该次检测的完整结构化结果与原始 JSO
+ 60      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | （4）报告导出任务中心：支持将选定的历史记录导出为 PDF、Word（docx）、Excel（xls
+ 61      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | （5）清空历史：提供分级保护机制，需要手动输入确认文字并二次确认方可清空全部记录，最大限度防止误操作
+ 62     IMG  jc=center flc=- sz=- b= ea=None ascii=None | 
+ 63 CAP  jc=center flc=- sz=21 b=0 ea=SimSun ascii=Times New Roman | 历史记录页面
+ 64      jc=both flc=-  | 
+ 65 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 1.6 用户管理（管理员）
+ 66      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 管理员点击右上角“用户管理”进入账户管理页面。页面以表格列出全部用户，包括用户名、角色、状态、创建时
+ 67     IMG  jc=center flc=- sz=- b= ea=None ascii=None | 
+ 68 CAP  jc=center flc=- sz=21 b=0 ea=SimSun ascii=Times New Roman | 用户管理页面（管理员）
+ 69 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 1.7 显示设置
+ 70      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 点击右上角“设置”打开显示设置面板，提供两项个性化选项：
+ 71 BUL  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 深浅模式：一键切换浅色/深色界面主题，选择自动记忆，下次打开保持不变；
+ 72 BUL  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 字号缩放：拖动滑杆在 85%～135% 范围内整体缩放界面文字，适合不同显示环境与视力条件，支持一键
+ 73 BUL IMG  jc=center flc=- sz=- b= ea=None ascii=None | 
+ 74 CAP  jc=center flc=- sz=21 b=0 ea=SimSun ascii=Times New Roman | 显示设置面板
+ 75 H1   jc=- flc=- sz=28 b=1 ea=SimSun ascii=Times New Roman | 二、基本原理
+ 76 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 2.1 系统总体架构
+ 77      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 软件采用“浏览器前端 + 本地服务 + 推理引擎”的三层架构：
+ 78 BUL  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 前端界面层：基于 Gradio 构建的可视化操作界面，负责图片上传、结果展示、历史管理与报表导出等交
+ 79 BUL  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 业务服务层：基于 FastAPI 提供登录认证、用户管理、记录存取等业务接口，与前端一体化部署；
+ 80 BUL  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 推理引擎层：以视觉语言大模型（VLM）为核心，对巡检图像进行多模态理解与结构化评估。
+ 81      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 全部推理与数据存储均在本地完成，图片与检测数据不出内网，兼顾检测效率与数据安全。检测记录持久化保存于
+ 82 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 2.2 检测原理：视觉语言大模型损伤评估
+ 83      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 软件的检测能力源自面向风电塔结构损伤智能评估训练的视觉语言大模型（本章内容取材于大论文第四章）。风电
+ 84      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 软件采用的模型框架（WTVLM）包括四个阶段：预训练视觉语言模型选型、风电塔结构损伤图像-文本对数据
+ 85 H3   jc=- flc=- sz=24 b=0 ea=SimSun ascii=Times New Roman | 2.2.1 结构化数据集
+ 86      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 模型训练使用风电塔结构损伤图像-文本对数据集：图像约 65% 来源于 Kaggle 公开数据集，35
+ 87 H3   jc=- flc=- sz=24 b=0 ea=SimSun ascii=Times New Roman | 2.2.2 六阶段结构化提示词与多轮融合
+ 88      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 软件对每张图片的评估遵循一套面向工程巡检与安全运维设计的结构化提示词模板，将损伤诊断分解为六个循序渐
+ 89 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 图像质量预判：评价输入图像的视觉质量（清晰/一般/模糊/遮挡），为结论置信度奠定基础；
+ 90 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 构件识别：明确所分析构件在风电结构中的归属系统与具体名称；
+ 91 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 损伤判定：判断是否存在损伤、损伤类型（裂纹、腐蚀、涂层破损、结构变形、撞击损伤、烧蚀、连接件松动等）
+ 92 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 潜在风险与影响分析：评估损伤对结构安全性、机组运行可靠性及长期服役寿命的影响程度（无/低/中/高）；
+ 93 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 运维与处置建议：是否建议停机或限功率运行、短期处置措施、中长期修复方向、后续巡检关注部位；
+ 94 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 不确定性说明与结论汇总：反思证据充分性、是否需要补充图像或结合历史数据研判，给出整体置信度与巡检优先
+ 95      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 为抑制模型的感知幻觉与多次推理之间的不一致性，软件引入多轮独立评估与推理融合机制，构建“评估多样性 
+ 96 H3   jc=- flc=- sz=24 b=0 ea=SimSun ascii=Times New Roman | 2.2.3 模型微调与评估体系
+ 97      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 模型微调采用参数高效微调（LoRA）策略：在冻结预训练模型主体参数的前提下，仅训练少量新增低秩矩阵参
+ 98      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 模型质量通过一套分层、面向字段类型的多维评估体系保障，覆盖全部 24 个判读输出字段：判断类字段以严
+ 99 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 2.3 界面数据流
+100      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 前端界面的完整数据流如下：用户上传巡检图像后，软件对图像进行尺寸归一化等预处理并送入推理引擎；模型输
+101 H1   jc=- flc=- sz=28 b=1 ea=SimSun ascii=Times New Roman | 三、典型范例
+102 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 3.1 工况一：叶片表面涂层破损（中度损伤，优先级：中）
+103      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 输入图像：远景拍摄的风力发电机，左侧叶片表面有大面积深色痕迹。
+104      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 软件判读：界面显示模型识别出“叶片及轮毂”构件，判定为“涂层破损”。在“关键视觉证据”中准确描述为“
+105      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 工程价值：展示了软件在低分辨率、远距离图像下对大面积退化损伤的识别能力。
+106     IMG  jc=center flc=- sz=- b= ea=None ascii=None | 
+107 CAP  jc=center flc=- sz=21 b=0 ea=SimSun ascii=Times New Roman | 图8 工况一原始图像与可视化结果
+108 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 3.2 工况二：叶片表面轻度裂纹（轻微损伤，优先级：中）
+109      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 输入图像：叶片局部特写，表面有深色痕迹及绿色线条，背景为蓝天。
+110      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 软件判读：界面清晰显示模型识别出“叶片结构”构件，并准确判定为“裂纹”损伤。“损伤分布位置与范围”输
+111      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 工程价值：验证了软件对细微表面缺陷的捕捉能力，并能结合可视化界面快速输出结构化报告。
+112     IMG  jc=center flc=- sz=- b= ea=None ascii=None | 
+113     IMG  jc=center flc=- sz=- b= ea=None ascii=None | 
+114 CAP  jc=center flc=- sz=21 b=0 ea=SimSun ascii=Times New Roman | 图9 工况二原始图像与可视化结果
+115 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 3.3 工况三：叶片根部严重断裂（重度损伤，优先级：高）
+116      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 输入图像：无人机近距离拍摄，显示叶片根部与轮毂连接处完全撕裂，内部结构裸露。
+117      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 软件判读：界面给出“高严重度”判定，并直接触发“建议停机、限功率运行或重点监测”为“是”。模型识别出
+118      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 工程价值：验证了软件在严重灾难性失效场景下的“零漏报”能力，其高风险判断的可靠性极高。
+119     IMG  jc=center flc=- sz=- b= ea=None ascii=None | 
+120 CAP  jc=center flc=- sz=21 b=0 ea=SimSun ascii=Times New Roman | 图10 工况三原始图像与可视化结果
+121 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 3.4 工况四：塔筒连接处断裂（灾难性损伤，优先级：高）
+122      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 输入图像：远景拍摄，显示白色管状结构（塔筒或支撑臂）在连接处断裂，呈非正常角度分离。
+123      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 软件判读：界面将构件识别为“塔筒或支撑臂”，并判定为“断裂”。在“风险分析”中给出“对结构安全性影响
+124      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 工程价值：展示了软件对非叶片类结构（塔筒）的泛化识别能力，并验证了多轮融合机制在低质量图像下的保守收
+125     IMG  jc=center flc=- sz=- b= ea=None ascii=None | 
+126 CAP  jc=center flc=- sz=21 b=0 ea=SimSun ascii=Times New Roman | 图11 工况四原始图像与可视化结果
+127 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 3.5 案例综合讨论
+128      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 从典型案例的整体表现看，软件在以下三方面展现工程化潜力：
+129 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 损伤类型识别覆盖完整：从无损伤、涂层破损到裂纹、撞击损伤、结构变形等多种类型均有准确判读；
+130 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 风险等级判定保守稳健：高严重度案例100%触发“建议停机”决策，无漏报；
+131 NUM  jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 处置建议具备可执行性：能够给出“无损检测方法选择”“后续巡检关注区域”等具体指导。
+132      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 同时，案例也反映出两点改进方向：其一，复合损伤工况的优先级判定偏激进，低严重度损伤可能被判为高优先级
+133 H2   jc=- flc=- sz=24 b=1 ea=SimSun ascii=Times New Roman | 3.6 典型操作流程示例
+134      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 以风电场一次日常巡检为例，说明软件的典型使用流程：
+135      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 巡检人员将无人机采集的叶片、塔筒照片导入电脑，登录软件进入单图检测页；
+136      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 逐张（或使用批量检测页成批）上传照片并开始分析，等待状态下通过已用时计时掌握进度；
+137      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 对判定为“建议停机”或“优先级：高”的红色高亮结果，立即通报运维负责人安排复检；
+138      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 在历史记录页按日期与风险状态筛选本次巡检记录，结合统计图表掌握本场站损伤类型分布与趋势；
+139      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 通过导出任务中心生成 PDF / Word 巡检报告归档，或导出 CSV 台账供场站管理系统使用；
+140      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | 对同一部位不同时期的照片重复检测，借助历史记录对比损伤发展趋势，为制定检修周期提供参考。
+141      jc=both flc=200 sz=24 b=0 ea=SimSun ascii=Times New Roman | —— 以上为说明书全部内容 ——

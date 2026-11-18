@@ -9,3 +9,10 @@ qwen3.5-4b*/
 qa_screenshots/
 qa_tmp/
 persisted_images/
+
+# ── 交接补充：编辑器/日志/临时文件 ──
+.vscode/
+__MACOSX/
+*.log
+~$*
+qa_screenshots/
