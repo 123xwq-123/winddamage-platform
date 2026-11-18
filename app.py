@@ -20,6 +20,7 @@ import os
 import sys
 import time
 import json
+from urllib.parse import quote
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -95,6 +96,30 @@ def _do_inference(image_path):
     model = get_model()
     parsed, raw, infer_time = model.infer(image_path)
     return parsed, raw, infer_time
+
+
+def _damage_locator_payload(parsed):
+    """将模型报告压缩为三维风机可视化所需的安全定位数据。"""
+    has_damage = get_field(parsed, i18n.SECTION_DAMAGE, "是否存在损伤")
+    return {
+        "hasDamage": has_damage.strip() in ("是", "Yes", "yes", "true", "True"),
+        "part": get_field(parsed, i18n.SECTION_COMPONENT, "构件名称"),
+        "type": get_field(parsed, i18n.SECTION_DAMAGE, "损伤类型"),
+        "location": get_field(parsed, i18n.SECTION_DAMAGE, "损伤分布位置与范围"),
+    }
+
+
+def _viewer_bridge_html(parsed=None):
+    """返回 Three.js 风机 iframe，通过查询参数传入报告的损伤定位数据。"""
+    payload = _damage_locator_payload(parsed) if parsed else {
+        "hasDamage": False, "part": "", "type": "", "location": ""
+    }
+    encoded = quote(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), safe="")
+    return (
+        '<div class="wd-turbine-frame">'
+        '<iframe title="风机三维损伤定位" '
+        f'src="/wd-assets/wind_turbine_viewer.html?v=10&amp;damage={encoded}"></iframe></div>'
+    )
 
 
 def _summary_card_html(parsed, meta=None):
@@ -182,12 +207,12 @@ def analyze_single(image, request: gr.Request = None):
     """单图分析（生成器）。
 
     先立即 yield 一条带旋转 spinner 的"分析中"状态条（等待动效），
-    推理完成后再 yield 最终结果。返回值结构与之前一致：
-    (summary, detail_html, json_out, status, img_info, md_path, json_path)。
+    推理完成后再 yield 最终结果。返回值结构为：
+    (summary, detail_html, json_out, status, img_info, md_path, json_path, viewer_html)。
     """
     if image is None:
         yield (tr("msg_please_upload"), _empty_result_html(), "",
-               tr("msg_upload_first"), "", None, None)
+               tr("msg_upload_first"), "", None, None, _viewer_bridge_html())
         return
 
     image_path = image if isinstance(image, str) else getattr(image, 'name', str(image))
@@ -196,14 +221,15 @@ def analyze_single(image, request: gr.Request = None):
         yield (
             tr("msg_file_not_exist"),
             uc.status_banner(f'{uc.esc(tr("msg_file_not_exist"))}: {uc.esc(image_path)}', "error"),
-            "", tr("msg_file_not_exist"), "", None, None,
+            "", tr("msg_file_not_exist"), "", None, None, _viewer_bridge_html(),
         )
         return
 
     img_info = get_image_info(image_path)
 
     # 等待动效：立即给出"分析中"状态（spinner），清空旧结果避免误读
-    yield ("", uc.working_banner(tr("msg_working")), "", "", img_info, None, None)
+    yield ("", uc.working_banner(tr("msg_working")), "", "", img_info, None, None,
+           _viewer_bridge_html())
 
     try:
         t0 = time.time()
@@ -216,6 +242,7 @@ def analyze_single(image, request: gr.Request = None):
                 uc.status_banner(tr("msg_infer_parse_fail", t=infer_time), "error")
                 + f"<pre style='overflow-x:auto;background:#F0F3F7;padding:12px;border-radius:8px;font-size:12px;'>{uc.esc(raw[:2000])}</pre>",
                 raw, tr("msg_infer_parse_fail", t=infer_time), img_info, None, None,
+                _viewer_bridge_html(),
             )
             return
 
@@ -243,7 +270,8 @@ def analyze_single(image, request: gr.Request = None):
         md_path = save_export(parsed, image_name, infer_time, fmt="md")
         json_path = save_export(parsed, image_name, infer_time, fmt="json")
 
-        yield summary, detail_html, json_str, status, img_info, md_path, json_path
+        yield (summary, detail_html, json_str, status, img_info, md_path, json_path,
+               _viewer_bridge_html(parsed))
 
     except Exception as e:
         import traceback
@@ -252,7 +280,7 @@ def analyze_single(image, request: gr.Request = None):
             tr("msg_infer_fail"),
             uc.status_banner(f'{uc.esc(tr("msg_error", e=e))}', "error")
             + f"<pre style='overflow-x:auto;background:#F0F3F7;padding:12px;border-radius:8px;font-size:12px;'>{uc.esc(traceback.format_exc()[:1500])}</pre>",
-            "", tr("msg_error", e=e), img_info, None, None,
+            "", tr("msg_error", e=e), img_info, None, None, _viewer_bridge_html(),
         )
 
 
@@ -919,13 +947,22 @@ _BADGE_JS = """
     const el = document.getElementById('wd-user-badge');
     if (!el) return false;
     const role = u.role === 'admin' ? '__ROLE_ADMIN__' : '__ROLE_USER__';
+    // 小图标：内联 SVG（Feather 风格描边），尺寸/颜色由 CSS 控制
+    const ic = (p) => '<svg class="wd-ub-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
+    const IC_USER = ic('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>');
+    const IC_SHIELD = ic('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>');
+    const IC_USERS = ic('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>');
+    const IC_KEY = ic('<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>');
+    const IC_OUT = ic('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>');
+    const IC_GEAR = ic('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>');
     el.innerHTML =
-      '<span class="wd-ub-name" title="' + u.username + '">' + u.username + '</span>'
-      + '<span class="wd-badge wd-badge-muted">' + role + '</span>'
-      + (u.role === 'admin' ? '<a href="/users">__USERS_LINK__</a>' : '')
-      + '<a href="/change-password">__PW_LINK__</a>'
-      + '<a href="/logout">__LOGOUT_LINK__</a>'
-      + '<a href="javascript:void(0)" id="wd-settings-link">__SETTINGS_LINK__</a>';
+      '<span class="wd-ub-chip">' + IC_USER
+      + '<span class="wd-ub-name" title="' + u.username + '">' + u.username + '</span></span>'
+      + '<span class="wd-badge wd-badge-muted">' + IC_SHIELD + role + '</span>'
+      + (u.role === 'admin' ? '<a class="wd-ub-link" href="/users">' + IC_USERS + '__USERS_LINK__</a>' : '')
+      + '<a class="wd-ub-link" href="/change-password">' + IC_KEY + '__PW_LINK__</a>'
+      + '<a class="wd-ub-link" href="/logout">' + IC_OUT + '__LOGOUT_LINK__</a>'
+      + '<a class="wd-ub-link" href="javascript:void(0)" id="wd-settings-link">' + IC_GEAR + '__SETTINGS_LINK__</a>';
     // "设置"：打开自定义中文显示设置弹层（深浅模式/字号缩放，localStorage 持久化）。
     // 不再使用 Gradio 英文设置面板（其开关是页脚按钮的私有组件状态，无公开路由）。
     const sl = document.getElementById('wd-settings-link');
@@ -995,10 +1032,21 @@ def _settings_popover_html() -> str:
         '    </div>\n'
         '  </div>\n'
         '  <div class="wd-sp-row">\n'
+        f'    <span class="wd-sp-label">{uc.esc(tr("settings_skin"))}</span>\n'
+        '    <div class="wd-sp-seg wd-sp-skin" id="wd-sp-skin">\n'
+        f'      <button type="button" data-wd-skin="clear">{uc.esc(tr("skin_clear"))}</button>\n'
+        f'      <button type="button" data-wd-skin="night">{uc.esc(tr("skin_night"))}</button>\n'
+        f'      <button type="button" data-wd-skin="glass">{uc.esc(tr("skin_glass"))}</button>\n'
+        f'      <button type="button" data-wd-skin="bento">{uc.esc(tr("skin_bento"))}</button>\n'
+        f'      <button type="button" data-wd-skin="hmi">{uc.esc(tr("skin_hmi"))}</button>\n'
+        f'      <button type="button" data-wd-skin="hud">{uc.esc(tr("skin_hud"))}</button>\n'
+        '    </div>\n'
+        '  </div>\n'
+        '  <div class="wd-sp-row">\n'
         f'    <label class="wd-sp-label" for="wd-sp-font">{uc.esc(tr("settings_font"))}</label>\n'
         '    <div class="wd-sp-font">\n'
-        '      <input type="range" id="wd-sp-font" min="85" max="135" step="5" value="100"/>\n'
-        '      <span id="wd-sp-font-val">100%</span>\n'
+        '      <input type="range" id="wd-sp-font" min="85" max="135" step="5" value="115"/>\n'
+        '      <span id="wd-sp-font-val">115%</span>\n'
         f'      <button type="button" id="wd-sp-font-reset">{uc.esc(tr("settings_reset"))}</button>\n'
         '    </div>\n'
         '  </div>\n'
@@ -1026,7 +1074,7 @@ _SETTINGS_POPOVER_JS = """
     document.documentElement.style.setProperty('--wd-fs', String(v));
   }
   var fs = parseFloat(get('wd_font_scale'));
-  if (!isFinite(fs) || fs < 0.85 || fs > 1.35) fs = 1;
+  if (!isFinite(fs) || fs < 0.85 || fs > 1.35) fs = 1.15;
   applyFont(fs);
 
   // ── 深浅模式：Gradio 主题由 ?__theme= 启动时决定 → 不一致就带参跳转一次 ──
@@ -1040,6 +1088,73 @@ _SETTINGS_POPOVER_JS = """
     return; // 跳转中，后续初始化在新页面继续
   }
   var curDark = hasDark;
+
+  // ── 界面风格（五主题皮肤）：html[data-wd-theme] 即时切换，localStorage 持久化 ──
+  var SKINS = ['clear', 'night', 'glass', 'bento', 'hmi', 'hud'];
+  // 把主题广播给 3D 风机 viewer（iframe 内换天空/草地/HUD 配色）。
+  // viewer iframe 可能晚于本脚本加载，故除即时发送外再延迟重发两次。
+  function postTheme(name) {
+    var frames = document.querySelectorAll('.wd-turbine-frame iframe, #wd-bg-viewer');
+    Array.prototype.forEach.call(frames, function (f) {
+      try { f.contentWindow.postMessage({wdTheme: name}, '*'); } catch (err) {}
+    });
+  }
+  function applySkin(name) {
+    if (SKINS.indexOf(name) < 0) name = 'clear';
+    if (name === 'clear') {
+      document.documentElement.removeAttribute('data-wd-theme');
+    } else {
+      document.documentElement.setAttribute('data-wd-theme', name);
+    }
+    postTheme(name);
+    moveViewerForSkin(name);
+    setTimeout(function () { postTheme(name); }, 1500);
+    setTimeout(function () { postTheme(name); }, 5000);
+  }
+  // ── HUD 全屏背景：viewer（含风机模型与复位按钮等自带界面）留在
+  //    中栏槽位，布局即最初的左中右三栏；另建一个纯风景 iframe 固定
+  //    在页面最底层当背景（?bg=1：隐藏主风机与自带 HUD，只渲染天空/
+  //    草地/远景风机）。模型 iframe 从不移动 DOM——彻底避免移动触发
+  //    的重载与滚动坐标同步问题。切到其他皮肤时移除背景层。──
+  var BG_ID = 'wd-bg-viewer';
+  function removeBgViewer() {
+    var f = document.getElementById(BG_ID);
+    if (f) f.parentNode.removeChild(f);
+  }
+  function ensureBgViewer() {
+    if (document.getElementById(BG_ID)) return true;
+    if (!document.body) return false;
+    var f = document.createElement('iframe');
+    f.id = BG_ID;
+    f.src = '/wd-assets/wind_turbine_viewer.html?bg=1';
+    f.title = '背景';
+    document.body.appendChild(f);
+    return true;
+  }
+  window.addEventListener('message', function (ev) {
+    // 背景层加载完成后补发主题（加载前 postMessage 会丢）
+    if (ev.data && ev.data.wdViewerReady) postTheme(nameSafe());
+  });
+  function nameSafe() {
+    return document.documentElement.getAttribute('data-wd-theme') || 'hud';
+  }
+  function moveViewerForSkin(name) {
+    if (name !== 'hud') { removeBgViewer(); return; }
+    var n = 0;
+    var t = setInterval(function () {
+      if (ensureBgViewer() || ++n >= 40) clearInterval(t);
+    }, 501);
+  }
+  function refreshSkinBtns() {
+    var box = document.getElementById('wd-sp-skin');
+    if (!box) return;
+    var cur = document.documentElement.getAttribute('data-wd-theme') || 'clear';
+    Array.prototype.forEach.call(box.querySelectorAll('button'), function (b) {
+      b.classList.toggle('wd-active', b.getAttribute('data-wd-skin') === cur);
+    });
+  }
+  applySkin(get('wd_skin') || 'hud');
+  refreshSkinBtns();
 
   // ── 弹层开合与控件绑定（元素渲染完成前重试） ──
   var tries = 0;
@@ -1066,7 +1181,7 @@ _SETTINGS_POPOVER_JS = """
     window.__wdToggleSettings = function () {
       var open = pop.classList.toggle('wd-open');
       mask.classList.toggle('wd-open', open);
-      if (open) refreshThemeBtns();
+      if (open) { refreshThemeBtns(); refreshSkinBtns(); }
     };
     mask.addEventListener('click', function () { window.__wdToggleSettings(); });
     var closeBtn = document.getElementById('wd-sp-close');
@@ -1075,6 +1190,15 @@ _SETTINGS_POPOVER_JS = """
     if (themeBox) themeBox.addEventListener('click', function (ev) {
       var b = ev.target.closest ? ev.target.closest('button[data-wd-theme]') : null;
       if (b) gotoTheme(b.getAttribute('data-wd-theme') === 'dark');
+    });
+    var skinBox = document.getElementById('wd-sp-skin');
+    if (skinBox) skinBox.addEventListener('click', function (ev) {
+      var b = ev.target.closest ? ev.target.closest('button[data-wd-skin]') : null;
+      if (!b) return;
+      var s = b.getAttribute('data-wd-skin') || 'clear';
+      applySkin(s);
+      set('wd_skin', s === 'clear' ? null : s);
+      refreshSkinBtns();
     });
     var range = document.getElementById('wd-sp-font');
     var val = document.getElementById('wd-sp-font-val');
@@ -1085,14 +1209,14 @@ _SETTINGS_POPOVER_JS = """
         var v = parseInt(range.value, 10) / 100;
         fs = v; applyFont(v);
         if (val) val.textContent = range.value + '%';
-        set('wd_font_scale', v === 1 ? null : String(v));
+        set('wd_font_scale', v === 1.15 ? null : String(v));
       });
     }
     var reset = document.getElementById('wd-sp-font-reset');
     if (reset) reset.addEventListener('click', function () {
-      fs = 1; applyFont(1); set('wd_font_scale', null);
-      if (range) range.value = '100';
-      if (val) val.textContent = '100%';
+      fs = 1.15; applyFont(1.15); set('wd_font_scale', null);
+      if (range) range.value = '115';
+      if (val) val.textContent = '115%';
     });
     return true;
   }
@@ -1116,6 +1240,13 @@ def build_ui():
                 .replace("__LOGOUT_LINK__", tr("btn_logout"))
                 .replace("__SETTINGS_LINK__", tr("settings_link")))
     with gr.Blocks(title=tr("app_title")) as app:
+        # 固定全屏动态风场：蓝天、云层、摆动草地与旋转的远景风机。
+        # iframe 与主工作台隔离，避免 Three.js 动画影响 Gradio 组件重绘。
+        gr.HTML(
+            '<div class="wd-dynamic-bg-host" aria-hidden="true">'
+            '<iframe src="/wd-assets/dynamic_wind_farm.html?v=2" tabindex="-1" '
+            'title=""></iframe></div>'
+        )
         # 顶栏用户徽章（内容由 _BADGE_JS 注入）
         gr.HTML('<div id="wd-user-badge" class="wd-user-badge"></div>')
         # 显示设置弹层（右上角"设置"打开；深浅模式 + 字号缩放，localStorage 持久化）
@@ -1141,13 +1272,14 @@ def build_ui():
         with gr.Tabs():
             # ─── Tab 1: 单图检测 ────────────────────────────
             with gr.TabItem(tr("tab_single")):
-                with gr.Row(equal_height=False):
-                    with gr.Column(scale=1):
-                        gr.Markdown(tr("upload_section"))
+                with gr.Row(equal_height=False, elem_classes=["wd-workbench-grid"]):
+                    # 左：检测图像输入与操作
+                    with gr.Column(scale=20, min_width=300, elem_classes=["wd-workbench-col", "wd-input-col"]):
+                        gr.Markdown("### 原始检测图片")
                         img_input = gr.Image(
                             label=tr("upload_label"),
                             type="filepath",
-                            height=350,
+                            height=330,
                         )
                         img_info_text = gr.Textbox(
                             label=tr("img_info_label"), interactive=False,
@@ -1165,22 +1297,33 @@ def build_ui():
                                 if os.path.exists(img):
                                     examples.append([img])
                         if examples:
-                            gr.Examples(examples=examples, inputs=img_input, label=tr("examples_label") % len(examples))
+                            gr.Examples(examples=examples, inputs=img_input, label=tr("examples_label") % len(examples),
+                                        examples_per_page=10)
 
-                        # 检测状态：HTML 状态条（支持等待动效 spinner / 彩色结果条）
                         status_text = gr.HTML(value="")
-
-                        with gr.Row():
-                            btn_export_md = gr.Button(tr("btn_export_md"))
-                            btn_export_json = gr.Button(tr("btn_export_json"))
-                            btn_copy_json = gr.Button(tr("btn_copy_json"))
-
+                        with gr.Row(elem_classes=["wd-export-row"]):
+                            btn_export_md = gr.Button(tr("btn_export_md"), elem_classes=["wd-export-btn"])
+                            btn_export_json = gr.Button(tr("btn_export_json"), elem_classes=["wd-export-btn"])
+                            btn_copy_json = gr.Button(tr("btn_copy_json"), elem_classes=["wd-export-btn"])
                         export_md_file = gr.File(label=tr("md_report_label"), interactive=False)
                         export_json_file = gr.File(label=tr("json_report_label"), interactive=False)
 
-                    with gr.Column(scale=2):
+                    # 中：WTA 方案中的程序化 Three.js 风机与损伤定位
+                    with gr.Column(scale=58, min_width=0, elem_classes=["wd-workbench-col", "wd-model-col"]):
+                        gr.Markdown("### 风机三维损伤定位")
+                        turbine_viewer = gr.HTML(
+                            value=_viewer_bridge_html(),
+                            elem_classes=["wd-turbine-viewer"],
+                        )
+
+                    # 右：模型检测报告
+                    with gr.Column(scale=22, min_width=340, elem_classes=["wd-workbench-col", "wd-report-col"]):
+                        gr.Markdown("### 模型检测报告")
                         summary_md = gr.Markdown(tr("waiting_summary"))
-                        detail_html = gr.HTML(value=EMPTY_RESULT_HTML)
+                        detail_html = gr.HTML(
+                            value=EMPTY_RESULT_HTML,
+                            elem_classes=["wd-report-output"],
+                        )
                         with gr.Accordion(tr("json_accordion"), open=False):
                             json_out = gr.Code(language="json", label=tr("json_raw_label"), interactive=False)
 
@@ -1362,11 +1505,14 @@ def build_ui():
         btn_analyze.click(
             fn=analyze_single,
             inputs=[img_input],
-            outputs=[summary_md, detail_html, json_out, status_text, img_info_text, export_md_file, export_json_file],
+            outputs=[summary_md, detail_html, json_out, status_text, img_info_text,
+                     export_md_file, export_json_file, turbine_viewer],
         )
         btn_clear.click(
-            fn=lambda: ("", EMPTY_RESULT_HTML, "", "", tr("img_info_default"), None, None),
-            outputs=[img_input, detail_html, json_out, status_text, img_info_text, export_md_file, export_json_file],
+            fn=lambda: (None, EMPTY_RESULT_HTML, "", "", tr("img_info_default"),
+                        None, None, _viewer_bridge_html()),
+            outputs=[img_input, detail_html, json_out, status_text, img_info_text,
+                     export_md_file, export_json_file, turbine_viewer],
         )
         # 导出按钮触发重新分析（因为导出文件已在分析时生成）
         btn_export_md.click(

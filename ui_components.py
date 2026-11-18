@@ -37,6 +37,13 @@ BASE_CSS = """
   --text-1:#1F2933; --text-2:#52606D; --text-3:#9AA5B1;
   --border:#E4E7EB; --bg-page:#F5F7FA; --bg-card:#FFFFFF;
   --table-head:#F0F3F7;
+  /* 表面色（主题可覆盖） */
+  --bg-card-tint:rgba(255,255,255,.94);
+  --bg-field:#FFFFFF;
+  --row-danger-hover:#FBDDD9;
+  --veil-top:rgba(245,247,250,.88); --veil-mid:rgba(245,247,250,.70); --veil-bot:rgba(245,247,250,.50);
+  --air-top:rgba(250,253,255,.50); --air-mid:rgba(248,253,251,.30); --air-bot:rgba(246,252,247,.22);
+  --turbine-sky:#8ED0F2; --turbine-border:#8AB9CB;
   /* 阴影 / 焦点 / 遮罩 */
   --shadow-1:0 1px 3px rgba(31,41,51,.08);
   --shadow-2:0 4px 12px rgba(31,41,51,.12);
@@ -47,40 +54,33 @@ BASE_CSS = """
   --ease-standard:cubic-bezier(.2,0,0,1);
 }
 
-/* ── 页面基调（真实风机照片背景 + 宋体/Times New Roman 字体）──
-   注意：html/body/:root 规则必须走 <link>（见文件头说明），
-   不能被 Gradio 的 css= 前缀化，否则主页面不生效。 */
+/* ── 页面基调（动态风场背景 + 宋体/Times New Roman 字体）──
+   主页面由固定 iframe 绘制蓝天、云层、摆动草地与旋转风机；独立认证页仍以
+   bg_photo.jpg 作为无脚本兜底。顶层规则必须通过 head 内联样式注入。 */
 :root {
   --bg-photo: url("/wd-assets/bg_photo.jpg");
   --font-stack: "Times New Roman", "SimSun", "宋体", "NSimSun", serif;
+  --wd-fs: 1.15;
 }
-html {
-  background: var(--bg-page) !important; /* 兜底纯色，图片未加载时也不影响可读 */
-}
-/* Gradio 运行时会用内联样式给 html/body/gradio-app 涂 neutral 底色，且主页面
-   模板自带 body{background:var(--bg)}；这些背景都是不透明的，会盖住 z-index:-1
-   的照片层。必须整条链路（html → body → gradio-app → .gradio-container）
-   全部透明，照片才能透出来（内联样式是普通优先级，!important 可压过）。 */
-html, body, gradio-app, .gradio-container {
-  background: transparent !important;
-}
-body { margin: 0; }
-/* 照片背景用 z-index:-1 的固定定位伪元素承载：
-   - 永远垫在所有内容之下（不依赖页面结构里有没有 .gradio-container，
-     登录页等 FastAPI 直渲染页面同样安全）；
-   - 位置固定但只合成一次，滚动/交互零重绘（避免 background-attachment:fixed
-     的全页重绘卡顿）；
-   - 上覆由深到浅的页面色渐变蒙版（"加透明"），顶部保证内容可读，底部露出风机照片。 */
+html { background:var(--bg-page) !important; }
+html, body, gradio-app, .gradio-container { background:transparent !important; }
+body { margin:0; }
 body::before {
-  content: "";
-  position: fixed; inset: 0; z-index: -1;
-  pointer-events: none;
+  content:""; position:fixed; inset:0; z-index:-3; pointer-events:none;
   background:
-    linear-gradient(180deg,
-      rgba(245,247,250,.94) 0%,
-      rgba(245,247,250,.80) 55%,
-      rgba(245,247,250,.52) 100%),
+    linear-gradient(180deg,var(--veil-top) 0%,var(--veil-mid) 54%,var(--veil-bot) 100%),
     var(--bg-photo) center / cover no-repeat;
+}
+.wd-dynamic-bg-host {
+  position:fixed !important; inset:0 !important; width:100vw !important; height:100vh !important;
+  z-index:-2 !important; pointer-events:none !important; overflow:hidden !important;
+  border:0 !important; padding:0 !important; margin:0 !important; background:transparent !important;
+}
+.wd-dynamic-bg-host iframe { width:100%; height:100%; border:0; display:block; }
+/* 浅色空气蒙版保证任何时刻文字均清晰，同时保留草地与风机的运动感。 */
+body::after {
+  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background:linear-gradient(180deg,var(--air-top),var(--air-mid) 58%,var(--air-bot));
 }
 .gradio-container, .gradio-container button, .gradio-container input,
 .gradio-container textarea, .gradio-container select,
@@ -89,20 +89,24 @@ body::before {
 }
 .gradio-container { font-variant-numeric: tabular-nums; }
 
-/* ── 显示比例还原：css= 注入路径失效期间主页面回落到了 Gradio 默认
-   小字号（12/14px）。这里按主题变量整体上调约 1px，恢复原有观感，
-   下拉/表格等组件字号随主题变量联动。
-   显示设置弹层的"字号缩放"调 :root 的 --wd-fs（默认 1），此处全部
-   px 值乘以该系数，缩放即时生效且与组件字号联动。 ── */
+/* ── 统一字号缩放：--wd-fs 只在 :root 定义，由显示设置脚本动态覆盖。
+   所有主题字号和关键硬编码字号均引用同一变量，避免容器局部变量遮蔽设置。 ── */
 .gradio-container {
-  --wd-fs: 1;
-  --text-sm: calc(13px * var(--wd-fs)) !important; --block-info-text-size: calc(13px * var(--wd-fs)) !important;
-  --block-label-text-size: calc(13px * var(--wd-fs)) !important; --block-title-text-size: calc(14px * var(--wd-fs)) !important;
-  --body-text-size: calc(15px * var(--wd-fs)) !important; --text-md: calc(15px * var(--wd-fs)) !important;
-  --text-lg: calc(17px * var(--wd-fs)) !important; --text-xl: calc(23px * var(--wd-fs)) !important;
-  --text-xxl: calc(26px * var(--wd-fs)) !important;
+  --text-xs: calc(13px * var(--wd-fs)) !important;
+  --text-sm: calc(14px * var(--wd-fs)) !important; --block-info-text-size: calc(14px * var(--wd-fs)) !important;
+  --block-label-text-size: calc(14px * var(--wd-fs)) !important; --block-title-text-size: calc(15px * var(--wd-fs)) !important;
+  --body-text-size: calc(16px * var(--wd-fs)) !important; --text-md: calc(16px * var(--wd-fs)) !important;
+  --text-lg: calc(18px * var(--wd-fs)) !important; --text-xl: calc(24px * var(--wd-fs)) !important;
+  --text-xxl: calc(28px * var(--wd-fs)) !important;
 }
 .gradio-container.gradio-container-6-26-0 { font-size: var(--text-md) !important; }
+.gradio-container .prose, .gradio-container label, .gradio-container input,
+.gradio-container textarea, .gradio-container select { font-size:calc(16px * var(--wd-fs)) !important; }
+.gradio-container button { min-height:44px; font-size:calc(16px * var(--wd-fs)) !important; padding:9px 16px !important; }
+.gradio-container .tab-nav { min-height:48px; }
+.gradio-container .tab-nav button {
+  min-height:46px; padding:0 20px !important; font-size:calc(16px * var(--wd-fs)) !important; font-weight:600;
+}
 
 /* 注意：不隐藏 Gradio 自带页脚（Use via API / 设置等入口）。
    旧写法因 css= 前缀化而从未生效；样式注入修复后若加此规则会把
@@ -115,7 +119,7 @@ body::before {
 .gradio-container .dropdown button,
 .gradio-container ul.options,
 .gradio-container ul.options li {
-  font-size: clamp(13px, 0.35vw + 11.5px, 15px) !important;
+  font-size: calc(15px * var(--wd-fs)) !important;
 }
 .gradio-container ul.options {
   max-height: 300px; overflow-y: auto;
@@ -148,9 +152,9 @@ body::before {
 .wd-summary.wd-tone-success { border-left-color:var(--success); background:var(--success-bg); }
 .wd-summary-grid { display:flex; flex-wrap:wrap; gap:8px 32px; align-items:center; }
 .wd-summary-item { min-width:120px; }
-.wd-summary-item .wd-label { font-size:12px; color:var(--text-2); margin-bottom:2px; }
-.wd-summary-item .wd-value { font-size:16px; font-weight:600; color:var(--text-1); }
-.wd-summary-title { font-size:15px; font-weight:600; color:var(--text-1); margin-bottom:10px; }
+.wd-summary-item .wd-label { font-size:calc(14px * var(--wd-fs)); color:var(--text-2); margin-bottom:2px; }
+.wd-summary-item .wd-value { font-size:calc(18px * var(--wd-fs)); font-weight:600; color:var(--text-1); }
+.wd-summary-title { font-size:calc(17px * var(--wd-fs)); font-weight:600; color:var(--text-1); margin-bottom:10px; }
 
 /* ── 风险横幅（浅底 + 色条，不用高饱和红块） ───────── */
 .wd-banner {
@@ -158,12 +162,12 @@ body::before {
   border-radius:8px; padding:12px 16px; margin-bottom:16px;
   background:var(--danger-bg); border-left:4px solid var(--danger);
 }
-.wd-banner .wd-banner-text { font-size:15px; font-weight:600; color:var(--danger-deep); }
+.wd-banner .wd-banner-text { font-size:calc(16px * var(--wd-fs)); font-weight:600; color:var(--danger-deep); }
 
 /* ── 风险徽章（胶囊，浅底深字，文字+颜色双通道） ───── */
 .wd-badge {
   display:inline-block; padding:2px 12px; border-radius:999px;
-  font-size:13px; font-weight:600; line-height:20px; white-space:nowrap;
+  font-size:calc(14px * var(--wd-fs)); font-weight:600; line-height:22px; white-space:nowrap;
 }
 .wd-badge-danger  { background:var(--danger-bg);  color:var(--danger-deep); }
 .wd-badge-warn    { background:var(--warn-bg);    color:var(--warn-deep); }
@@ -179,7 +183,7 @@ details.wd-sec {
 }
 details.wd-sec > summary {
   cursor:pointer; list-style:none; display:flex; align-items:center; gap:8px;
-  padding:12px 16px; font-size:15px; font-weight:600; color:var(--brand-700);
+  padding:12px 16px; font-size:calc(17px * var(--wd-fs)); font-weight:600; color:var(--brand-700);
   background:var(--table-head); border-bottom:1px solid transparent;
   transition:background var(--duration-fast) var(--ease-standard);
 }
@@ -194,7 +198,7 @@ details.wd-sec[open] > summary::after { transform:rotate(180deg); }
 details.wd-sec > .wd-sec-body { padding:12px 16px; }
 
 /* ── 键值表格（报告字段） ──────────────────────────── */
-table.wd-kv { width:100%; border-collapse:collapse; font-size:14px; }
+table.wd-kv { width:100%; border-collapse:collapse; font-size:calc(16px * var(--wd-fs)); }
 table.wd-kv td { padding:7px 8px; vertical-align:top; border-bottom:1px solid var(--border); }
 table.wd-kv tr:last-child td { border-bottom:none; }
 table.wd-kv td.wd-kv-label { width:150px; color:var(--text-2); white-space:nowrap; }
@@ -203,7 +207,7 @@ table.wd-kv td.wd-kv-value { color:var(--text-1); font-weight:500; word-break:br
 /* ── 数据表格（历史/批量） ─────────────────────────── */
 .table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:8px;
   box-shadow:var(--shadow-1); background:var(--bg-card); }
-table.wd-table { width:100%; border-collapse:collapse; font-size:13px; }
+table.wd-table { width:100%; border-collapse:collapse; font-size:calc(15px * var(--wd-fs)); }
 table.wd-table th {
   background:var(--table-head); color:var(--text-2); font-weight:600;
   padding:9px 10px; text-align:left; white-space:nowrap;
@@ -214,7 +218,7 @@ table.wd-table td { padding:7px 10px; border-bottom:1px solid var(--border); col
 table.wd-table tbody tr:nth-child(even) { background:var(--bg-page); }
 table.wd-table tbody tr:hover { background:var(--brand-100); }
 table.wd-table tr.wd-row-danger { background:var(--danger-bg); }
-table.wd-table tr.wd-row-danger:hover { background:#FBDDD9; }
+table.wd-table tr.wd-row-danger:hover { background:var(--row-danger-hover); }
 table.wd-table td.wd-num { font-variant-numeric:tabular-nums; text-align:right; }
 
 /* ── 统计卡 ────────────────────────────────────────── */
@@ -318,11 +322,97 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
 .wd-mcard .wd-mcard-actions a.wd-mcard-primary { background:var(--brand-700);
   color:#fff; border-color:var(--brand-700); }
 
-/* ── 响应式 ────────────────────────────────────────── */
+/* ── 单图检测工作台：保留顶栏，余下视口由左输入 / 中三维 / 右报告铺满 ─ */
+.gradio-container { width:100% !important; max-width:none !important; }
+.app.fillable:not(.fill_width) { max-width:none !important; width:100% !important; }
+.wd-workbench-grid {
+  align-items:stretch !important; gap:12px !important; flex-wrap:nowrap !important;
+  width:100%; min-width:0; height:calc(100vh - 158px); height:calc(100dvh - 158px);
+  min-height:610px; overflow:hidden;
+}
+.wd-workbench-col {
+  min-width:0 !important; min-height:0 !important; height:100%; overflow:hidden;
+  background:var(--bg-card-tint); border:1px solid rgba(190,210,220,.9);
+  border-radius:10px; box-shadow:var(--shadow-1); padding:12px !important;
+}
+.wd-workbench-col > .prose:first-child h3 { margin:0 0 8px; color:var(--brand-700); }
+.wd-input-col { flex:0 1 20% !important; overflow-y:auto; overflow-x:hidden; scrollbar-gutter:stable; }
+.wd-input-col .image-container { min-height:230px; }
+.wd-input-col .gallery {
+  display:grid !important; grid-template-columns:repeat(auto-fill, 80px) !important;
+  gap:8px !important; justify-content:start; padding:2px 0;
+}
+.wd-input-col .gallery .gallery-item,
+.wd-input-col .gallery-item,
+.wd-input-col .gallery .container {
+  width:80px !important; height:80px !important; max-width:80px !important;
+  min-width:80px !important; overflow:hidden !important; padding:0 !important;
+  margin:0 !important;
+}
+.wd-input-col .gallery-item img,
+.wd-input-col .gallery .container img {
+  width:80px !important; height:80px !important; object-fit:cover !important;
+}
+.wd-export-row {
+  flex-direction:column !important; flex-wrap:nowrap !important;
+  align-items:stretch !important; gap:8px !important; margin:0 !important;
+}
+.wd-export-btn {
+  width:100% !important; min-width:0 !important;
+  white-space:nowrap !important; justify-content:center;
+}
+/* 三列容器一律禁止横向换列：flex-column + wrap 在列高不足时会把
+   viewer 等子块“换列”推到列右侧（视口较矮时触发，页面横向错位）。
+   改为 nowrap 后子块纵向堆叠；同时禁止 flex 按比例压扁超高子块
+   （否则标题块会被压成十几像素、文字被裁掉半截），超出部分交给
+   列内部滚动兜底；常规视口无影响。 */
+.wd-workbench-col { flex-wrap:nowrap !important; justify-content:flex-start !important; }
+.wd-workbench-col > * { flex-shrink:0 !important; }
+.wd-model-col { flex:1 1 58% !important; display:flex !important; flex-direction:column !important; }
+.wd-turbine-viewer {
+  position:relative !important; flex:1 1 auto !important; min-height:620px !important; height:calc(100dvh - 230px) !important;
+  padding:0 !important; overflow:hidden !important;
+}
+.wd-turbine-viewer > div { height:100% !important; min-height:620px !important; }
+.wd-turbine-frame {
+  position:absolute; inset:0; width:100%; height:100%; min-height:620px; overflow:hidden; border:1px solid var(--turbine-border);
+  border-radius:9px; background:var(--turbine-sky); box-shadow:inset 0 0 24px rgba(31,89,112,.13);
+}
+.wd-turbine-frame iframe { width:100%; height:100%; display:block; border:0; background:var(--turbine-sky); }
+.wd-report-col { flex:0 1 22% !important; flex-direction:column !important; flex-wrap:nowrap !important; overflow-y:auto !important; overflow-x:hidden !important; scrollbar-gutter:stable; }
+.wd-report-col > * { flex:0 0 auto !important; min-height:min-content !important; }
+.wd-report-output { flex:0 0 auto !important; height:auto !important; overflow:visible !important; }
+.wd-report-col > *, .wd-report-col .html-container,
+.wd-report-col .html-container > div { min-width:0 !important; max-width:100% !important; width:100%; height:auto !important; }
+.wd-report-col details.wd-sec { width:100%; }
+.wd-report-col table.wd-kv { table-layout:fixed; }
+.wd-report-col table.wd-kv td.wd-kv-label {
+  width:36%; min-width:0; white-space:normal; overflow-wrap:anywhere; word-break:break-word;
+}
+.wd-report-col table.wd-kv td.wd-kv-value { overflow-wrap:anywhere; word-break:break-word; }
+.wd-report-col .wd-summary { padding:12px 13px; margin-bottom:10px; }
+.wd-report-col .wd-summary-grid { gap:7px 14px; }
+.wd-report-col .wd-summary-item { min-width:calc(50% - 8px); }
+.wd-report-col .wd-banner { margin-bottom:10px; }
+.wd-report-col details.wd-sec { margin-bottom:9px; }
+.wd-report-col details.wd-sec > summary { padding:10px 12px; }
+.wd-report-col details.wd-sec > .wd-sec-body { padding:8px 10px; }
+
+/* ── 响应式：1280px 起保持三栏，窄屏回落为两栏 + 报告 ───── */
+@media (max-width: 1279px) {
+  .wd-workbench-grid { flex-wrap:wrap !important; height:auto; min-height:0; overflow:visible; }
+  .wd-input-col { flex:1 1 34% !important; height:650px; }
+  .wd-model-col { flex:1 1 58% !important; height:650px; }
+  .wd-report-col { flex:1 1 100% !important; height:auto; max-height:760px; }
+}
 @media (max-width: 767px) {
   .main-title h1 { font-size:24px; }
   .wd-summary-grid { flex-direction:column; align-items:flex-start; }
   .wd-stat { min-width:calc(50% - 8px); }
+  .wd-workbench-col { height:auto; min-height:auto !important; flex:1 1 100% !important; overflow:visible !important; }
+  .wd-model-col { height:500px; }
+  .wd-turbine-frame { height:440px; min-height:420px; }
+  .wd-report-col { max-height:none; }
 }
 
 /* ── 动效降级 ──────────────────────────────────────── */
@@ -393,6 +483,8 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
 .wd-sp-row:last-child { margin-bottom:0; }
 .wd-sp-label { display:block; font-size:13px; color:var(--text-2); margin-bottom:6px; }
 .wd-sp-seg { display:flex; gap:8px; }
+.wd-sp-seg.wd-sp-skin { flex-wrap:wrap; }
+.wd-sp-seg.wd-sp-skin button { flex:1 0 28%; }
 .wd-sp-seg button { flex:1; font-size:13px; padding:7px 0; cursor:pointer;
   border:1px solid var(--border); border-radius:6px; background:var(--bg-page);
   color:var(--text-2); }
@@ -435,7 +527,7 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
   font-weight:600; margin-bottom:6px; }
 .wd-field input[type="text"], .wd-field input[type="password"] {
   width:100%; box-sizing:border-box; padding:12px 14px; font-size:15px;
-  border:1px solid var(--border); border-radius:8px; background:#fff;
+  border:1px solid var(--border); border-radius:8px; background:var(--bg-field);
   color:var(--text-1); }
 .wd-field input:focus { outline:2px solid var(--brand-500); outline-offset:1px;
   border-color:var(--brand-500); }
@@ -495,6 +587,10 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
   max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* 徽章行内的角色胶囊（管理员/普通用户）跟随放大，但仍比链接略小一档 */
 .wd-user-badge .wd-badge { font-size:14px; line-height:22px; }
+/* 账号胶囊容器：仅承载布局（图标在非 HUD 皮肤下隐藏，视觉与原版一致） */
+.wd-user-badge .wd-ub-chip { display:inline-flex; align-items:center; gap:6px; }
+/* 小图标默认隐藏——只有 HUD 皮肤启用，其余五皮肤顶栏保持原样 */
+.wd-user-badge .wd-ub-ic { display:none; }
 
 /* ── Gradio 页脚：设置按钮的宿主，视觉上隐藏但保留在 DOM ──
    右上角"设置"链接靠程序化点击页脚按钮打开设置面板（组件私有状态，
@@ -503,6 +599,409 @@ button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
   position: absolute !important; width: 1px !important; height: 1px !important;
   overflow: hidden !important; clip-path: inset(50%) !important;
   pointer-events: none !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   五主题皮肤系统（设置弹层"界面风格"切换，localStorage 持久化）
+   默认 = A 晴空浅色（:root 原值）；以下为 token 覆盖块。
+   JS 在 <html> 上设 data-wd-theme 属性即时切换，无需刷新。
+   ══════════════════════════════════════════════════════════ */
+
+/* ── B 夜航 · 深色监控中枢 ── */
+[data-wd-theme="night"] {
+  --brand-900:#67E8F9; --brand-700:#22D3EE; --brand-500:#38BDF8; --brand-100:rgba(34,211,238,.14);
+  --danger:#F87171; --danger-deep:#FCA5A5; --danger-bg:rgba(248,113,113,.13);
+  --warn:#FBBF24;   --warn-deep:#FCD34D;   --warn-bg:rgba(251,191,36,.13);
+  --success:#34D399;--success-deep:#6EE7B7;--success-bg:rgba(52,211,153,.13);
+  --info:#38BDF8;   --info-bg:rgba(56,189,248,.13);
+  --text-1:#E5EDF7; --text-2:#A9BBD4; --text-3:#7C8DB0;
+  --border:#243049; --bg-page:#0B1220; --bg-card:#131C2E;
+  --table-head:#18233A;
+  --bg-card-tint:rgba(19,28,46,.94);
+  --bg-field:#0F1930;
+  --row-danger-hover:rgba(248,113,113,.22);
+  --veil-top:rgba(11,18,32,.94); --veil-mid:rgba(11,18,32,.90); --veil-bot:rgba(11,18,32,.84);
+  --air-top:rgba(11,18,32,.80); --air-mid:rgba(11,18,32,.72); --air-bot:rgba(11,18,32,.62);
+  --turbine-sky:#0E1B33; --turbine-border:#24365C;
+  --shadow-1:0 1px 3px rgba(0,0,0,.45);
+  --shadow-2:0 4px 12px rgba(0,0,0,.55);
+  --focus-ring:0 0 0 3px rgba(56,189,248,.30);
+  --overlay:rgba(0,0,0,.62);
+}
+/* 夜航：重映射 Gradio 组件变量，使控件随主题变深（不改 ?__theme） */
+[data-wd-theme="night"] .gradio-container {
+  --background-fill-primary:#0B1220; --background-fill-secondary:#131C2E;
+  --block-background-fill:#131C2E; --panel-background-fill:#131C2E;
+  --border-color-primary:#243049; --border-color-accent:#243049;
+  --block-border-color:#243049; --input-border-color:#243049;
+  --body-text-color:#E5EDF7; --block-text-color: #E5EDF7; --block-info-text-color:#A9BBD4;
+  --block-label-text-color:#A9BBD4; --block-title-text-color:#E5EDF7;
+  --block-label-background-fill:#18233A; --block-label-border-color:#243049;
+  --block-title-background-fill:#18233A;
+  --border-color-accent:#243049; --background-fill-secondary:#131C2E;
+  --input-background-fill:#0F1930; --input-background-fill-focus:#0F1930;
+  --input-text-color:#E5EDF7; --placeholder-text-color:#7C8DB0;
+  --checkbox-background-color:#0F1930; --table-border-color: #243049;
+  --button-secondary-background-fill:#18233A; --button-secondary-background-fill-hover:#1E2B45;
+  --button-secondary-text-color:#E5EDF7; --button-primary-background-fill:#0E7490;
+  --button-primary-background-fill-hover:#22D3EE; --color-accent:#22D3EE;
+  --link-text-color:#38BDF8; --body-background-fill:#0B1220;
+  --stat-background-fill:#131C2E; --code-background-fill:#0F1930;
+  --prose-text-color:#E5EDF7; --shadow-drop:rgba(0,0,0,.45); --shadow-drop-lg:rgba(0,0,0,.55);
+}
+[data-wd-theme="night"] .gradio-container .prose,
+[data-wd-theme="night"] .gradio-container .prose h1,
+[data-wd-theme="night"] .gradio-container .prose h2,
+[data-wd-theme="night"] .gradio-container .prose h3 { color:var(--text-1); }
+/* 对比度加固：无论 Gradio 深浅模式（.dark）如何叠加，夜航下所有正文面必须浅字深底。
+   这些选择器带 !important，防止组件级样式或 Gradio 主题变量把文字打回深色。 */
+[data-wd-theme="night"] .gradio-container .prose,
+[data-wd-theme="night"] .gradio-container .prose h1,
+[data-wd-theme="night"] .gradio-container .prose h2,
+[data-wd-theme="night"] .gradio-container .prose h3,
+[data-wd-theme="night"] .gradio-container .prose h4,
+[data-wd-theme="night"] .gradio-container .prose p,
+[data-wd-theme="night"] .gradio-container .prose span,
+[data-wd-theme="night"] .gradio-container .html-container,
+[data-wd-theme="night"] .gradio-container .html-container div,
+[data-wd-theme="night"] .gradio-container .html-container span,
+[data-wd-theme="night"] .gradio-container .html-container td,
+[data-wd-theme="night"] .gradio-container .html-container th,
+[data-wd-theme="night"] .gradio-container .prose li { color:var(--text-1) !important; }
+[data-wd-theme="night"] .gradio-container label,
+[data-wd-theme="night"] .gradio-container [data-testid="block-label"],
+[data-wd-theme="night"] .gradio-container .block-info,
+[data-wd-theme="night"] .gradio-container .prose { color:var(--text-1) !important; }
+[data-wd-theme="night"] .gradio-container details.wd-sec > summary {
+  color:var(--brand-700) !important;
+  background:var(--table-head);
+}
+[data-wd-theme="night"] .gradio-container .wd-empty .wd-empty-title { color:var(--text-1) !important; }
+[data-wd-theme="night"] .gradio-container .wd-empty .wd-empty-desc { color:var(--text-3) !important; }
+/* 按钮对比度加固：Gradio 按钮文字色有自己的变量链（.dark 类下取深色值），
+   仅重映射 --button-secondary-text-color 不够 —— 必须按变体强制。 */
+[data-wd-theme="night"] .gradio-container button,
+[data-wd-theme="night"] .gradio-container button span { color:var(--text-1) !important; }
+[data-wd-theme="night"] .gradio-container button.lg { border:1px solid var(--border) !important; }
+[data-wd-theme="night"] .gradio-container button.primary,
+[data-wd-theme="night"] .gradio-container button.primary span { color:#FFFFFF !important; }
+[data-wd-theme="night"] .gradio-container a { color:var(--brand-500) !important; }
+[data-wd-theme="night"] .gradio-container .pagination { color:var(--text-2) !important; }
+/* 弹层激活按钮：夜航的 --brand-500 是亮青，必须配深字（白字只有 1.8:1） */
+[data-wd-theme="night"] .wd-sp-seg button.wd-active { color:#0B1220 !important; }
+/* 标签片兜底：block-label/block-info chip（"图片信息"等）背景必须随主题压深，
+   否则与强制浅色的文字冲突（浅蓝底×浅字 ≈ 1:1） */
+[data-wd-theme="night"] .gradio-container [data-testid="block-label"],
+[data-wd-theme="night"] .gradio-container [data-testid="block-info"],
+[data-wd-theme="night"] .gradio-container [class*="block-label"] {
+  background:var(--table-head) !important;
+  border-color:var(--border) !important;
+  color:var(--text-2) !important;
+}
+[data-wd-theme="night"] .gradio-container [data-testid="block-label"] span,
+[data-wd-theme="night"] .gradio-container [data-testid="block-info"] span { color:var(--text-2) !important; }
+[data-wd-theme="night"] .wd-workbench-col { border-color:var(--border); }
+[data-wd-theme="night"] .wd-turbine-frame { box-shadow:inset 0 0 24px rgba(0,0,0,.5); }
+[data-wd-theme="night"] button.wd-btn-danger {
+  background:var(--bg-card) !important; color:var(--danger-deep) !important;
+  border:1px solid var(--danger) !important;
+}
+[data-wd-theme="night"] button.wd-btn-danger:hover { background:var(--danger-bg) !important; }
+
+/* ── C 流光 · 玻璃拟态新能源（浅色基底 + 半透明卡片） ── */
+[data-wd-theme="glass"] {
+  --brand-900:#155E75; --brand-700:#0E7490; --brand-500:#0891B2; --brand-100:rgba(8,145,178,.12);
+  --text-1:#0F172A; --text-2:#334155; --text-3:#64748B;
+  --border:rgba(15,23,42,.14); --bg-page:#F0FAFC; --bg-card:rgba(255,255,255,.72);
+  --table-head:rgba(255,255,255,.6);
+  --bg-card-tint:rgba(255,255,255,.66);
+  --bg-field:rgba(255,255,255,.85);
+  --veil-top:rgba(240,250,252,.55); --veil-mid:rgba(235,248,250,.45); --veil-bot:rgba(235,248,250,.38);
+  --turbine-sky:#A5DDF3; --turbine-border:#7FC5E0;
+  --shadow-1:0 1px 3px rgba(15,23,42,.08);
+  --shadow-2:0 8px 24px rgba(15,23,42,.14);
+  --focus-ring:0 0 0 3px rgba(8,145,178,.25);
+  --overlay:rgba(15,23,42,.40);
+}
+/* 极光画在 ::after（z-index -1，位于天空 iframe 之上），否则被背景挡住 */
+[data-wd-theme="glass"] body::after {
+  background:
+    radial-gradient(60% 55% at 12% 8%, rgba(103,232,249,.30), transparent 62%),
+    radial-gradient(55% 50% at 88% 14%, rgba(59,130,246,.22), transparent 60%),
+    radial-gradient(70% 60% at 50% 96%, rgba(52,211,153,.26), transparent 65%),
+    linear-gradient(180deg,var(--air-top),var(--air-mid) 58%,var(--air-bot));
+  animation:wd-aurora 26s ease-in-out infinite alternate;
+}
+@keyframes wd-aurora {
+  from { background-position:0% 0%, 100% 0%, 50% 100%, 0 0; }
+  to   { background-position:36% 18%, 62% 30%, 38% 66%, 0 0; }
+}
+[data-wd-theme="glass"] .wd-card,
+[data-wd-theme="glass"] .wd-workbench-col,
+[data-wd-theme="glass"] .wd-summary,
+[data-wd-theme="glass"] details.wd-sec,
+[data-wd-theme="glass"] .table-wrap {
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+}
+/* 弹层/抽屉浮在内容之上，必须近乎不透明，避免背后文字透出串行 */
+[data-wd-theme="glass"] .wd-settings-popover,
+[data-wd-theme="glass"] .wd-drawer { background:rgba(255,255,255,.96); }
+@media (prefers-reduced-motion: reduce) {
+  [data-wd-theme="glass"] .wd-card,
+  [data-wd-theme="glass"] .wd-workbench-col { backdrop-filter:none; -webkit-backdrop-filter:none; }
+}
+
+/* ── D 棱格 · Bento 极简数据风（近白底 + 细边框 + 去阴影） ── */
+[data-wd-theme="bento"] {
+  --brand-900:#1E3A8A; --brand-700:#1D4ED8; --brand-500:#2563EB; --brand-100:rgba(37,99,235,.08);
+  --text-1:#1C1917; --text-2:#57534E; --text-3:#A8A29E;
+  --border:#E7E5E4; --bg-page:#FAFAF9; --bg-card:#FFFFFF;
+  --table-head:#F5F5F4;
+  --bg-card-tint:rgba(255,255,255,.97);
+  --bg-field:#FFFFFF;
+  --veil-top:rgba(250,250,249,.92); --veil-mid:rgba(250,250,249,.85); --veil-bot:rgba(250,250,249,.78);
+  --turbine-sky:#CBE7F5; --turbine-border:#B5D9EC;
+  --shadow-1:none; --shadow-2:none;
+  --focus-ring:0 0 0 3px rgba(37,99,235,.22);
+}
+[data-wd-theme="bento"] .wd-card,
+[data-wd-theme="bento"] .wd-workbench-col,
+[data-wd-theme="bento"] .wd-stat { border-radius:12px; box-shadow:none; }
+[data-wd-theme="bento"] .wd-workbench-col { border:1px solid var(--border); }
+/* Bento：标题层级加大加粗，数据数字特大号（信息层级优先） */
+[data-wd-theme="bento"] .wd-workbench-col > .prose:first-child h3 {
+  font-size:calc(20px * var(--wd-fs)); font-weight:800; letter-spacing:-.01em;
+}
+[data-wd-theme="bento"] .wd-stat .wd-stat-num { font-size:32px; font-weight:800; }
+[data-wd-theme="bento"] .wd-summary-title { font-size:calc(18px * var(--wd-fs)); font-weight:700; }
+
+/* ── E 电网 · 工业 HMI（灰蓝面板 + 电力黄主色） ── */
+[data-wd-theme="hmi"] {
+  --brand-900:#8A6100; --brand-700:#B8860B; --brand-500:#F5A700; --brand-100:rgba(245,167,0,.14);
+  --text-1:#1F2A38; --text-2:#3E4C5E; --text-3:#7B8794;
+  --border:#C3CFDB; --bg-page:#E8EDF2; --bg-card:#F2F6F9;
+  --table-head:#DDE5EC;
+  --bg-card-tint:rgba(242,246,249,.96);
+  --bg-field:#FFFFFF;
+  --veil-top:rgba(232,237,242,.92); --veil-mid:rgba(232,237,242,.86); --veil-bot:rgba(232,237,242,.78);
+  --turbine-sky:#9CC8E4; --turbine-border:#7FAECB;
+  --focus-ring:0 0 0 3px rgba(245,167,0,.30);
+  --overlay:rgba(31,42,56,.45);
+}
+[data-wd-theme="hmi"] .wd-stat { border-top-color:var(--brand-500); }
+[data-wd-theme="hmi"] .wd-stat .wd-stat-num { color:var(--brand-900); }
+[data-wd-theme="hmi"] .wd-workbench-col { border:1px solid var(--border); border-radius:6px; }
+[data-wd-theme="hmi"] details.wd-sec > summary {
+  font-weight:700; letter-spacing:.5px; text-transform:none;
+}
+/* HMI：状态色与形状双通道（色弱可辨）——高▲ / 中■ / 低● */
+[data-wd-theme="hmi"] .wd-badge-danger::before { content:"▲ "; font-size:.82em; }
+[data-wd-theme="hmi"] .wd-badge-warn::before   { content:"■ "; font-size:.82em; }
+[data-wd-theme="hmi"] .wd-badge-success::before{ content:"● "; font-size:.82em; }
+[data-wd-theme="hmi"] .gradio-container button { border-radius:6px; }
+
+/* ── F 深空 HUD · 融合参考1（智慧风电监管平台）+ 参考2（光储能源平台） ──
+   参考1：深空海军蓝、面板 L 形角标、青色发光描边、科技感标签；
+   参考2：半透明蓝面板、左侧竖条标题、网格底纹、胶囊描边按钮。 */
+[data-wd-theme="hud"] {
+  --brand-900:#67E8F9; --brand-700:#22D3EE; --brand-500:#06B6D4; --brand-100:rgba(34,211,238,.12);
+  --danger:#F87171; --danger-deep:#FCA5A5; --danger-bg:rgba(248,113,113,.12);
+  --warn:#FBBF24;   --warn-deep:#FCD34D;   --warn-bg:rgba(251,191,36,.12);
+  --success:#34D399;--success-deep:#6EE7B7;--success-bg:rgba(52,211,153,.12);
+  --info:#38BDF8;   --info-bg:rgba(56,189,248,.12);
+  --text-1:#DCEBFA; --text-2:#9FBEDA; --text-3:#6684A3;
+  --border:rgba(103,232,249,.26); --bg-page:#071426; --bg-card:#0C2138;
+  --table-head:rgba(18,42,68,.85);
+  --bg-card-tint:rgba(12,33,56,.82);
+  --bg-field:rgba(7,20,38,.85);
+  --row-danger-hover:rgba(248,113,113,.20);
+  --veil-top:rgba(7,20,38,.96); --veil-mid:rgba(7,20,38,.93); --veil-bot:rgba(7,20,38,.88);
+  --air-top:rgba(7,20,38,.82); --air-mid:rgba(7,20,38,.74); --air-bot:rgba(7,20,38,.64);
+  --turbine-sky:#0B1D33; --turbine-border:rgba(103,232,249,.35);
+  --shadow-1:0 0 0 1px rgba(103,232,249,.06);
+  --shadow-2:0 8px 28px rgba(2,10,22,.6);
+  --focus-ring:0 0 0 3px rgba(34,211,238,.28);
+  --overlay:rgba(2,10,22,.66);
+}
+/* 参考2：科技网格底纹（细网格 + 青色光晕），画在天空 iframe 之上 */
+[data-wd-theme="hud"] body::after {
+  background:
+    repeating-linear-gradient(0deg, rgba(103,232,249,.08) 0 1px, transparent 1px 44px),
+    repeating-linear-gradient(90deg, rgba(103,232,249,.08) 0 1px, transparent 1px 44px),
+    radial-gradient(58% 46% at 14% 6%, rgba(34,211,238,.14), transparent 62%),
+    radial-gradient(52% 44% at 88% 92%, rgba(14,116,144,.18), transparent 64%),
+    linear-gradient(180deg,var(--air-top),var(--air-mid) 58%,var(--air-bot));
+}
+/* 参考1：面板 L 形角标（::before 左上 + ::after 右下）与青边半透明面板 */
+[data-wd-theme="hud"] .wd-workbench-col {
+  position:relative; border:1px solid var(--border);
+  background:linear-gradient(158deg, rgba(14,38,64,.88) 0%, rgba(9,25,45,.84) 100%);
+  backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+}
+[data-wd-theme="hud"] .wd-workbench-col::before,
+[data-wd-theme="hud"] .wd-workbench-col::after {
+  content:""; position:absolute; width:16px; height:16px; pointer-events:none;
+}
+[data-wd-theme="hud"] .wd-workbench-col::before {
+  top:0; left:0; border-top:2px solid var(--brand-500); border-left:2px solid var(--brand-500);
+}
+[data-wd-theme="hud"] .wd-workbench-col::after {
+  bottom:0; right:0; border-bottom:2px solid var(--brand-500); border-right:2px solid var(--brand-500);
+}
+/* 参考2：面板标题左竖条 + 科技字距 + 渐变下划线
+   （Gradio 的 h3 在 div.block > … > .prose 深处，故直接命中 h3。
+    注意：不可给 h3 加 padding-bottom/margin 等垂直尺寸——中栏标题变高
+    会改变 3D iframe 的屏幕几何，触发 Chromium 合成器丢弃 WebGL 层，
+    画布内容正确但屏上全黑；竖条与下划线均不占垂直空间。） */
+[data-wd-theme="hud"] .wd-workbench-col h3 {
+  border-left:3px solid var(--brand-500); padding-left:10px;
+  letter-spacing:2px; color:var(--brand-700);
+  background:linear-gradient(90deg, rgba(34,211,238,.16), transparent 72%) left bottom / 100% 2px no-repeat;
+}
+[data-wd-theme="hud"] details.wd-sec > summary {
+  letter-spacing:1.5px; border-left:3px solid var(--brand-500); padding-left:10px;
+  background:linear-gradient(90deg, rgba(34,211,238,.10), transparent 80%);
+}
+[data-wd-theme="hud"] .wd-stat { border-top-color:var(--brand-500); }
+[data-wd-theme="hud"] .wd-turbine-frame { box-shadow:inset 0 0 30px rgba(2,10,22,.55), 0 0 0 1px rgba(103,232,249,.18); }
+[data-wd-theme="hud"] table.wd-table tr:nth-child(even) { background:rgba(18,42,68,.45); }
+/* 高风险整行：底色盖过斑马纹（同等特异性靠后者胜）+ 左侧红色警示条 */
+[data-wd-theme="hud"] table.wd-table tr.wd-row-danger,
+[data-wd-theme="hud"] table.wd-table tr.wd-row-danger:nth-child(even) { background:rgba(248,113,113,.13); }
+[data-wd-theme="hud"] table.wd-table tr.wd-row-danger td:first-child { box-shadow:inset 3px 0 0 var(--danger); }
+[data-wd-theme="hud"] .gradio-container button.primary {
+  background:linear-gradient(135deg, #0E7490, #22D3EE) !important;
+  border:1px solid rgba(103,232,249,.6) !important;
+  box-shadow:0 0 14px rgba(34,211,238,.40);
+}
+[data-wd-theme="hud"] .gradio-container button.primary:hover { box-shadow:0 0 20px rgba(34,211,238,.62); }
+/* 深色皮肤的对比度加固与夜航同规格 */
+[data-wd-theme="hud"] .gradio-container .prose,
+[data-wd-theme="hud"] .gradio-container .prose h1,
+[data-wd-theme="hud"] .gradio-container .prose h2,
+[data-wd-theme="hud"] .gradio-container .prose h3,
+[data-wd-theme="hud"] .gradio-container .prose h4,
+[data-wd-theme="hud"] .gradio-container .prose p,
+[data-wd-theme="hud"] .gradio-container .prose span,
+[data-wd-theme="hud"] .gradio-container .html-container,
+[data-wd-theme="hud"] .gradio-container .html-container div,
+[data-wd-theme="hud"] .gradio-container .html-container span,
+[data-wd-theme="hud"] .gradio-container .html-container td,
+[data-wd-theme="hud"] .gradio-container .html-container th,
+[data-wd-theme="hud"] .gradio-container .prose li { color:var(--text-1) !important; }
+[data-wd-theme="hud"] .gradio-container button,
+[data-wd-theme="hud"] .gradio-container button span { color:var(--text-1) !important; }
+[data-wd-theme="hud"] .gradio-container button.primary,
+[data-wd-theme="hud"] .gradio-container button.primary span { color:#FFFFFF !important; }
+[data-wd-theme="hud"] .gradio-container button.lg { border:1px solid var(--border) !important; }
+[data-wd-theme="hud"] .gradio-container a { color:var(--brand-500) !important; }
+[data-wd-theme="hud"] .gradio-container [data-testid="block-label"],
+[data-wd-theme="hud"] .gradio-container [data-testid="block-info"],
+[data-wd-theme="hud"] .gradio-container [class*="block-label"] {
+  background:var(--table-head) !important;
+  border-color:var(--border) !important;
+  color:var(--text-2) !important;
+}
+[data-wd-theme="hud"] .gradio-container [data-testid="block-label"] span,
+[data-wd-theme="hud"] .gradio-container [data-testid="block-info"] span { color:var(--text-2) !important; }
+/* ── 状态强调强化：深底下徽章胶囊更醒目（放在上方 span 强制色规则之后，
+      特异性相同时靠后者胜；描边用 inset box-shadow，不增加几何尺寸） ── */
+[data-wd-theme="hud"] .gradio-container span.wd-badge-danger,
+[data-wd-theme="hud"] span.wd-badge-danger {
+  background:rgba(248,113,113,.22) !important;
+  color:#FECACA !important;
+  box-shadow:inset 0 0 0 1px rgba(248,113,113,.62), 0 0 12px rgba(248,113,113,.16);
+}
+[data-wd-theme="hud"] .gradio-container span.wd-badge-warn,
+[data-wd-theme="hud"] span.wd-badge-warn {
+  background:rgba(251,191,36,.18) !important;
+  color:#FDE68A !important;
+  box-shadow:inset 0 0 0 1px rgba(251,191,36,.52), 0 0 12px rgba(251,191,36,.12);
+}
+[data-wd-theme="hud"] .gradio-container span.wd-badge-success,
+[data-wd-theme="hud"] span.wd-badge-success {
+  background:rgba(52,211,153,.18) !important;
+  color:#A7F3D0 !important;
+  box-shadow:inset 0 0 0 1px rgba(52,211,153,.52), 0 0 12px rgba(52,211,153,.12);
+}
+[data-wd-theme="hud"] .gradio-container {
+  --background-fill-primary:#071426; --background-fill-secondary:#0C2138;
+  --block-background-fill:#0C2138; --panel-background-fill:#0C2138;
+  --border-color-primary:rgba(103,232,249,.26); --border-color-accent:rgba(103,232,249,.26);
+  --block-border-color:rgba(103,232,249,.26); --input-border-color:rgba(103,232,249,.26);
+  --body-text-color:#DCEBFA; --block-text-color:#DCEBFA; --block-info-text-color:#9FBEDA;
+  --block-label-text-color:#9FBEDA; --block-title-text-color:#DCEBFA;
+  --block-label-background-fill:#122A44; --block-label-border-color:rgba(103,232,249,.26);
+  --block-title-background-fill:#122A44;
+  --input-background-fill:rgba(7,20,38,.85); --input-background-fill-focus:rgba(7,20,38,.85);
+  --input-text-color:#DCEBFA; --placeholder-text-color:#6684A3;
+  --button-secondary-background-fill:#122A44; --button-secondary-background-fill-hover:#173356;
+  --button-secondary-text-color:#DCEBFA;
+  --link-text-color:#22D3EE; --body-background-fill:#071426;
+  --prose-text-color:#DCEBFA; --shadow-drop:rgba(2,10,22,.5); --shadow-drop-lg:rgba(2,10,22,.6);
+}
+[data-wd-theme="hud"] .wd-sp-seg button.wd-active { color:#04121F !important; }
+
+/* ── 顶栏用户徽章美化：账号胶囊 + 圆角图标链接（仅 HUD 皮肤；
+      padding-top 8→5 抵消胶囊增高，顶栏总高不变，下方布局零位移） ── */
+[data-wd-theme="hud"] .wd-user-badge { gap:8px; padding-top:3px; font-size:16px; }
+[data-wd-theme="hud"] .wd-user-badge .wd-ub-ic {
+  display:inline-block; width:15px; height:15px; flex:none;
+}
+[data-wd-theme="hud"] .wd-user-badge .wd-ub-chip {
+  padding:2px 13px; border-radius:999px;
+  background:rgba(14,38,64,.62); border:1px solid rgba(103,232,249,.32);
+  backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  box-shadow:0 0 10px rgba(34,211,238,.12);
+}
+[data-wd-theme="hud"] .wd-user-badge .wd-ub-chip .wd-ub-ic { color:var(--brand-700); }
+[data-wd-theme="hud"] .wd-user-badge .wd-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:1px 12px; border-radius:999px;
+  background:rgba(34,211,238,.12); border:1px solid rgba(103,232,249,.38);
+  color:#8DEFFF !important;
+}
+[data-wd-theme="hud"] .wd-user-badge .wd-badge .wd-ub-ic { width:13px; height:13px; color:#8DEFFF; }
+[data-wd-theme="hud"] .wd-user-badge a.wd-ub-link {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:2px 13px; border-radius:999px;
+  background:rgba(14,38,64,.45); border:1px solid rgba(103,232,249,.22);
+  text-decoration:none;
+  transition:background .18s, border-color .18s, box-shadow .18s;
+}
+[data-wd-theme="hud"] .wd-user-badge a.wd-ub-link:hover {
+  background:rgba(34,211,238,.14); border-color:rgba(103,232,249,.55);
+  box-shadow:0 0 12px rgba(34,211,238,.22); text-decoration:none;
+}
+[data-wd-theme="hud"] .wd-user-badge a.wd-ub-link .wd-ub-ic { color:var(--brand-700); }
+
+/* ── HUD 大屏化：viewer（风机+按钮）留在中栏槽位 = 最初的左中右三栏；
+    另有一个纯风景 iframe（脚本创建，body 层 id=wd-bg-viewer，z-index:-2）
+    固定铺满全屏当最底层背景，三栏玻璃面板悬浮其上。 */
+[data-wd-theme="hud"] body > iframe#wd-bg-viewer {
+  position:fixed; inset:0; width:100vw; height:100vh; z-index:-2;
+  border:0; display:block; background:var(--turbine-sky); pointer-events:none;
+}
+/* 中栏槽位：原样承装 viewer iframe（可交互——风机拖拽/滚轮缩放），
+   仅加可见描边与内阴影突出轮廓 */
+[data-wd-theme="hud"] .wd-turbine-frame {
+  border:1px solid rgba(103,232,249,.32);
+  box-shadow:inset 0 0 36px rgba(2,10,22,.38);
+}
+/* 三列统一玻璃面板：对齐新大屏 .sc-panel 质感（仅调透明度与模糊，几何不动）；
+   透明度调高，让底层风景背景透出来 */
+[data-wd-theme="hud"] .wd-workbench-col {
+  background:linear-gradient(158deg, rgba(14,38,64,.34) 0%, rgba(9,25,45,.24) 100%);
+  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+}
+/* 空气蒙版减淡：让背景风景透出来（文字对比度由玻璃面板保证） */
+[data-wd-theme="hud"] body::after {
+  background:
+    repeating-linear-gradient(0deg, rgba(103,232,249,.04) 0 1px, transparent 1px 44px),
+    repeating-linear-gradient(90deg, rgba(103,232,249,.04) 0 1px, transparent 1px 44px),
+    radial-gradient(58% 46% at 14% 6%, rgba(34,211,238,.08), transparent 62%),
+    radial-gradient(52% 44% at 88% 92%, rgba(14,116,144,.10), transparent 64%),
+    linear-gradient(180deg, rgba(7,20,38,.42), rgba(7,20,38,.32) 58%, rgba(7,20,38,.26));
 }
 """
 
